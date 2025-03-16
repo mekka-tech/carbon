@@ -9,6 +9,7 @@ pub struct CreatePool {
     pub open_time: u64,
 }
 
+#[derive(Debug)]
 pub struct CreatePoolInstructionAccounts {
     pub pool_creator: solana_sdk::pubkey::Pubkey,
     pub amm_config: solana_sdk::pubkey::Pubkey,

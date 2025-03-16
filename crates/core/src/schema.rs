@@ -77,6 +77,7 @@ pub struct ParsedInstruction<T: InstructionDecoderCollection> {
     pub instruction: DecodedInstruction<T>,
     /// A vector of parsed nested instructions.
     pub inner_instructions: Vec<ParsedInstruction<T>>,
+    pub index: usize,
 }
 
 /// Represents the schema for a transaction, defining the structure and expected

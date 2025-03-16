@@ -11,6 +11,8 @@ pub struct Initialize2 {
     pub init_coin_amount: u64,
 }
 
+
+#[derive(Debug)]
 pub struct Initialize2InstructionAccounts {
     pub token_program: solana_sdk::pubkey::Pubkey,
     pub spl_associated_token_account: solana_sdk::pubkey::Pubkey,

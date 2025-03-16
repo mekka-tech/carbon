@@ -196,6 +196,7 @@ impl<T: InstructionDecoderCollection, U> TransactionPipe<T, U> {
         instructions.iter().for_each(|nested_instr| {
             if let Some(parsed) = T::parse_instruction(&nested_instr.instruction) {
                 parsed_instructions.push(ParsedInstruction {
+                    index: nested_instr.metadata.index,
                     program_id: nested_instr.instruction.program_id,
                     instruction: parsed,
                     inner_instructions: self.parse_instructions(&nested_instr.inner_instructions),

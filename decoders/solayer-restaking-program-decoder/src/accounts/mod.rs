@@ -1,7 +1,7 @@
 use {
     super::SolayerRestakingProgramDecoder,
     carbon_core::{account::AccountDecoder, deserialize::CarbonDeserialize},
-    crates::PROGRAM_ID,
+    solayer_restaking_program::PROGRAM_ID,
 };
 pub mod restaking_pool;
 

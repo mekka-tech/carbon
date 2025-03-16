@@ -26,7 +26,7 @@ use {
     },
     async_trait::async_trait,
     serde::Deserialize,
-    solana_sdk::{instruction::AccountMeta, pubkey::Pubkey},
+    solana_sdk::{inner_instruction::InnerInstruction, instruction::{AccountMeta, Instruction}, pubkey::Pubkey},
     std::{ops::Deref, sync::Arc},
 };
 
@@ -48,6 +48,7 @@ use {
 pub struct InstructionMetadata {
     pub transaction_metadata: TransactionMetadata,
     pub stack_height: u32,
+    pub index: usize,
 }
 
 pub type InstructionsWithMetadata =

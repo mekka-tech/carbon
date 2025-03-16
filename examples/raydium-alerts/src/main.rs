@@ -1,3 +1,13 @@
+mod raydium {
+    pub mod raydium_amm_v4_processors;
+}
+mod events {
+    pub mod events;
+}
+
+use events::events::{SummarizedTokenBalance, NewPoolEventPayload};
+use raydium::raydium_amm_v4_processors::{RaydiumAmmV4InstructionProcessor, RaydiumAmmV4AccountProcessor};
+
 use {
     async_trait::async_trait,
     carbon_core::{
@@ -10,35 +20,67 @@ use {
     },
     carbon_raydium_amm_v4_decoder::{
         accounts::RaydiumAmmV4Account,
-        instructions::{
-            swap_base_in::SwapBaseIn, swap_base_out::SwapBaseOut, RaydiumAmmV4Instruction,
-        },
+        instructions::{initialize2::Initialize2, swap_base_in::SwapBaseIn, swap_base_out::SwapBaseOut, RaydiumAmmV4Instruction},
         RaydiumAmmV4Decoder,
+        PROGRAM_ID as RAYDIUM_AMM_V4_PROGRAM_ID,
+    },
+    carbon_raydium_clmm_decoder::{
+        accounts::RaydiumClmmAccount,
+        instructions::{create_pool::CreatePool, RaydiumClmmInstruction},
+        RaydiumClmmDecoder,
+        PROGRAM_ID as RAYDIUM_CLMM_PROGRAM_ID,
+    },
+    carbon_raydium_cpmm_decoder::{
+        accounts::RaydiumCpmmAccount,
+        instructions::{initialize::Initialize, RaydiumCpmmInstruction},
+        RaydiumCpmmDecoder,
+        PROGRAM_ID as RAYDIUM_CPMM_PROGRAM_ID,
+    },
+    carbon_pumpfun_decoder::{
+        instructions::PumpfunInstruction,
+        PumpfunDecoder,
+        PROGRAM_ID as PUMPFUN_PROGRAM_ID,
     },
     carbon_yellowstone_grpc_datasource::YellowstoneGrpcGeyserClient,
-    solana_sdk::{pubkey, pubkey::Pubkey},
     std::{
         collections::{HashMap, HashSet},
         env,
         sync::Arc,
     },
+    solana_sdk::{ native_token::LAMPORTS_PER_SOL },
+    solana_transaction_status::TransactionTokenBalance,
     tokio::sync::RwLock,
     yellowstone_grpc_proto::geyser::{
         CommitmentLevel, SubscribeRequestFilterAccounts, SubscribeRequestFilterTransactions,
     },
+    bullmq_rust::queue_service::QueueService,
+    bullmq_rust::job_model::JobData,
+    bullmq_rust::config_service::ConfigService,
+    chrono::Utc,
 };
 
-pub const RAYDIUM_AMM_V4_PROGRAM_ID: Pubkey =
-    pubkey!("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8");
 
 #[tokio::main]
 pub async fn main() -> CarbonResult<()> {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .format(|buf, record| {
+            use std::io::Write;
+            let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+            writeln!(
+                buf,
+                "[{}] {} - {}: {}",
+                timestamp,
+                record.level(),
+                record.target(),
+                record.args()
+            )
+        })
+        .init();
     dotenv::dotenv().ok();
 
     let mut account_filters: HashMap<String, SubscribeRequestFilterAccounts> = HashMap::new();
     account_filters.insert(
-        "raydium_account_filter".to_string(),
+        "raydium_amm_v4_account_filter".to_string(),
         SubscribeRequestFilterAccounts {
             account: vec![],
             owner: vec![RAYDIUM_AMM_V4_PROGRAM_ID.to_string().clone()],
@@ -46,20 +88,75 @@ pub async fn main() -> CarbonResult<()> {
             nonempty_txn_signature: None,
         },
     );
+    account_filters.insert(
+        "raydium_clmm_account_filter".to_string(),
+        SubscribeRequestFilterAccounts {
+            account: vec![],
+            owner: vec![RAYDIUM_CLMM_PROGRAM_ID.to_string().clone()],
+            filters: vec![],
+            nonempty_txn_signature: None,
+        },
+    );
+    account_filters.insert(
+        "raydium_cpmm_account_filter".to_string(),
+        SubscribeRequestFilterAccounts {
+            account: vec![],
+            owner: vec![RAYDIUM_CPMM_PROGRAM_ID.to_string().clone()],
+            filters: vec![],
+            nonempty_txn_signature: None,
+        },
+    );
+    account_filters.insert(
+        "raydium_cpmm_account_filter".to_string(),
+        SubscribeRequestFilterAccounts {
+            account: vec![],
+            owner: vec![RAYDIUM_CPMM_PROGRAM_ID.to_string().clone()],
+            filters: vec![],
+            nonempty_txn_signature: None,
+        },
+    );
 
-    let transaction_filter = SubscribeRequestFilterTransactions {
+    let mut transaction_filters: HashMap<String, SubscribeRequestFilterTransactions> =
+        HashMap::new();
+
+    transaction_filters.insert("raydium_amm_v4_transaction_filter".to_string(), SubscribeRequestFilterTransactions {
         vote: Some(false),
         failed: Some(false),
         account_include: vec![],
         account_exclude: vec![],
         account_required: vec![RAYDIUM_AMM_V4_PROGRAM_ID.to_string().clone()],
         signature: None,
-    };
+    });
 
-    let mut transaction_filters: HashMap<String, SubscribeRequestFilterTransactions> =
-        HashMap::new();
+    transaction_filters.insert("raydium_clmm_transaction_filter".to_string(), SubscribeRequestFilterTransactions {
+        vote: Some(false),
+        failed: Some(false),
+        account_include: vec![],
+        account_exclude: vec![],
+        account_required: vec![RAYDIUM_CLMM_PROGRAM_ID.to_string().clone()],
+        signature: None,
+    });
 
-    transaction_filters.insert("raydium_transaction_filter".to_string(), transaction_filter);
+    transaction_filters.insert(
+        "raydium_cpmm_transaction_filter".to_string(),
+        SubscribeRequestFilterTransactions {
+            vote: Some(false),
+            failed: Some(false),
+            account_include: vec![],
+            account_exclude: vec![],
+            account_required: vec![RAYDIUM_CPMM_PROGRAM_ID.to_string().clone()],
+            signature: None,
+        },
+    );
+
+    transaction_filters.insert("pumpfun_transaction_filter".to_string(), SubscribeRequestFilterTransactions {
+        vote: Some(false),
+        failed: Some(false),
+        account_include: vec![],
+        account_exclude: vec![],
+        account_required: vec![PUMPFUN_PROGRAM_ID.to_string().clone()],
+        signature: None,
+    });
 
     let yellowstone_grpc = YellowstoneGrpcGeyserClient::new(
         env::var("GEYSER_URL").unwrap_or_default(),
@@ -73,7 +170,12 @@ pub async fn main() -> CarbonResult<()> {
     carbon_core::pipeline::Pipeline::builder()
         .datasource(yellowstone_grpc)
         .instruction(RaydiumAmmV4Decoder, RaydiumAmmV4InstructionProcessor)
+        .instruction(RaydiumClmmDecoder, RaydiumClmmInstructionProcessor)
+        .instruction(RaydiumCpmmDecoder, RaydiumCpmmInstructionProcessor)
+        .instruction(PumpfunDecoder, PumpfunInstructionProcessor)
         .account(RaydiumAmmV4Decoder, RaydiumAmmV4AccountProcessor)
+        .account(RaydiumClmmDecoder, RaydiumClmmAccountProcessor)
+        .account(RaydiumCpmmDecoder, RaydiumCpmmAccountProcessor)
         .shutdown_strategy(carbon_core::pipeline::ShutdownStrategy::Immediate)
         .build()?
         .run()
@@ -82,13 +184,38 @@ pub async fn main() -> CarbonResult<()> {
     Ok(())
 }
 
-pub struct RaydiumAmmV4InstructionProcessor;
+pub struct RaydiumClmmAccountProcessor;
+#[async_trait]
+impl Processor for RaydiumClmmAccountProcessor {
+    type InputType = (AccountMetadata, DecodedAccount<RaydiumClmmAccount>);
+
+    async fn process(
+        &mut self,
+        data: Self::InputType,
+        _metrics: Arc<MetricsCollection>,
+    ) -> CarbonResult<()> {
+        let account = data.1;
+
+        match account.data {
+            RaydiumClmmAccount::AmmConfig(_amm_cfg) => {
+                // println!("\nAccount: {:#?}\nPool: {:#?}", data.0.pubkey, pool);
+            }
+            _ => {
+                // println!("\nUnnecessary Account: {:#?}", data.0.pubkey);
+            }
+        };
+
+        Ok(())
+    }
+}
+
+pub struct RaydiumClmmInstructionProcessor;
 
 #[async_trait]
-impl Processor for RaydiumAmmV4InstructionProcessor {
+impl Processor for RaydiumClmmInstructionProcessor {
     type InputType = (
         InstructionMetadata,
-        DecodedInstruction<RaydiumAmmV4Instruction>,
+        DecodedInstruction<RaydiumClmmInstruction>,
         Vec<NestedInstruction>,
     );
 
@@ -101,85 +228,15 @@ impl Processor for RaydiumAmmV4InstructionProcessor {
         let accounts = instruction.accounts;
 
         match instruction.data {
-            RaydiumAmmV4Instruction::Initialize2(init_pool) => {
-                log::info!("Initialize2: signature: {signature}, init_pool: {init_pool:?}");
-            }
-            RaydiumAmmV4Instruction::Initialize(initialize) => {
-                log::info!("Initialize: signature: {signature}, initialize: {initialize:?}");
-            }
-            RaydiumAmmV4Instruction::MonitorStep(monitor_step) => {
-                log::info!("MonitorStep: signature: {signature}, monitor_step: {monitor_step:?}");
-            }
-            RaydiumAmmV4Instruction::Deposit(deposit) => {
-                log::info!("Deposit: signature: {signature}, deposit: {deposit:?}");
-            }
-            RaydiumAmmV4Instruction::Withdraw(withdraw) => {
-                log::info!("Withdraw: signature: {signature}, withdraw: {withdraw:?}");
-            }
-            RaydiumAmmV4Instruction::MigrateToOpenBook(migrate_to_open_book) => {
-                log::info!("MigrateToOpenBook: signature: {signature}, migrate_to_open_book: {migrate_to_open_book:?}");
-            }
-            RaydiumAmmV4Instruction::SetParams(set_params) => {
-                log::info!("SetParams: signature: {signature}, set_params: {set_params:?}");
-            }
-            RaydiumAmmV4Instruction::WithdrawPnl(withdraw_pnl) => {
-                log::info!(
-                    "SetPaWithdrawPnlrams: signature: {signature}, withdraw_pnl: {withdraw_pnl:?}"
-                );
-            }
-            RaydiumAmmV4Instruction::WithdrawSrm(withdraw_srm) => {
-                log::info!("WithdrawSrm: signature: {signature}, withdraw_srm: {withdraw_srm:?}");
-            }
-            RaydiumAmmV4Instruction::SwapBaseIn(swap_base_in) => {
-                match SwapBaseIn::arrange_accounts(&accounts) {
-                    Some(accounts) => {
-                        log::info!(
-                        "SwapBaseIn: signature: {signature}, swap_base_in: {swap_base_in:?}, accounts: {accounts:#?}",
+            RaydiumClmmInstruction::CreatePool(create_pool) => match CreatePool::arrange_accounts(&accounts) {
+                Some(accounts) => {
+                    println!("CLMM CreatePool: signature: {signature}, create_pool: {create_pool:?}, accounts: {accounts:#?}",
                     );
-                    }
-                    None => log::error!(
-                        "Failed to arrange accounts for SwapBaseIn {}",
-                        accounts.len()
-                    ),
                 }
-            }
-            RaydiumAmmV4Instruction::PreInitialize(pre_initialize) => {
-                log::info!(
-                    "PreInitialize: signature: {signature}, pre_initialize: {pre_initialize:?}"
-                );
-            }
-            RaydiumAmmV4Instruction::SwapBaseOut(swap_base_out) => {
-                match SwapBaseOut::arrange_accounts(&accounts) {
-                    Some(accounts) => {
-                        log::info!(
-                            "SwapBaseOut: signature: {signature}, swap_base_out: {swap_base_out:?}, accounts: {accounts:#?}",
-                        );
-                    }
-                    None => log::error!(
-                        "Failed to arrange accounts for SwapBaseOut {}",
-                        accounts.len()
-                    ),
-                }
-            }
-            RaydiumAmmV4Instruction::SimulateInfo(simulate_info) => {
-                log::info!(
-                    "SimulateInfo: signature: {signature}, simulate_info: {simulate_info:?}"
-                );
-            }
-            RaydiumAmmV4Instruction::AdminCancelOrders(admin_cancel_orders) => {
-                log::info!(
-                    "AdminCancelOrders: signature: {signature}, admin_cancel_orders: {admin_cancel_orders:?}"
-                );
-            }
-            RaydiumAmmV4Instruction::CreateConfigAccount(create_config_account) => {
-                log::info!(
-                    "CreateConfigAccount: signature: {signature}, create_config_account: {create_config_account:?}"
-                );
-            }
-            RaydiumAmmV4Instruction::UpdateConfigAccount(update_config_account) => {
-                log::info!(
-                    "UpdateConfigAccount: signature: {signature}, update_config_account: {update_config_account:?}"
-                );
+                None => println!("Failed to arrange accounts for CLMM CreatePool {}", accounts.len()),
+            },
+            _ => {
+
             }
         };
 
@@ -187,10 +244,41 @@ impl Processor for RaydiumAmmV4InstructionProcessor {
     }
 }
 
-pub struct RaydiumAmmV4AccountProcessor;
+pub struct RaydiumCpmmInstructionProcessor;
+
 #[async_trait]
-impl Processor for RaydiumAmmV4AccountProcessor {
-    type InputType = (AccountMetadata, DecodedAccount<RaydiumAmmV4Account>);
+impl Processor for RaydiumCpmmInstructionProcessor {
+    type InputType = (InstructionMetadata, DecodedInstruction<RaydiumCpmmInstruction>, Vec<NestedInstruction>);
+
+    async fn process(
+        &mut self,
+        (metadata, instruction, _nested_instructions): Self::InputType,
+        _metrics: Arc<MetricsCollection>,
+    ) -> CarbonResult<()> {
+        let signature = metadata.transaction_metadata.signature;
+        let accounts = instruction.accounts;
+
+        match instruction.data {
+            RaydiumCpmmInstruction::Initialize(initialize) => match Initialize::arrange_accounts(&accounts) {
+                Some(accounts) => {
+                    println!("CPMM Initialize: signature: {signature}, initialize: {initialize:?}, accounts: {accounts:#?}",
+                    );
+                }
+                None => log::error!("Failed to arrange accounts for CPMM Initialize {}", accounts.len()),
+            },
+            _ => {
+                // Ignored
+            }
+        };
+
+        Ok(())
+    }
+}
+
+pub struct RaydiumCpmmAccountProcessor;
+#[async_trait]
+impl Processor for RaydiumCpmmAccountProcessor {
+    type InputType = (AccountMetadata, DecodedAccount<RaydiumCpmmAccount>);
 
     async fn process(
         &mut self,
@@ -200,14 +288,49 @@ impl Processor for RaydiumAmmV4AccountProcessor {
         let account = data.1;
 
         match account.data {
-            RaydiumAmmV4Account::AmmInfo(pool) => {
-                println!("\nAccount: {:#?}\nPool: {:#?}", data.0.pubkey, pool);
+            RaydiumCpmmAccount::AmmConfig(_amm_cfg) => {
+                // println!("\nAccount: {:#?}\nPool: {:#?}", data.0.pubkey, pool);
             }
             _ => {
-                println!("\nUnnecessary Account: {:#?}", data.0.pubkey);
+                // println!("\nUnnecessary Account: {:#?}", data.0.pubkey);
             }
         };
 
         Ok(())
     }
 }
+
+pub struct PumpfunInstructionProcessor;
+
+#[async_trait]
+impl Processor for PumpfunInstructionProcessor {
+    type InputType = (InstructionMetadata, DecodedInstruction<PumpfunInstruction>, Vec<NestedInstruction>);
+
+    async fn process(
+        &mut self,
+        (metadata, instruction, _nested_instructions): Self::InputType,
+        _metrics: Arc<MetricsCollection>,
+    ) -> CarbonResult<()> {
+        let signature = metadata.transaction_metadata.signature;
+        let accounts = instruction.accounts;
+
+        match instruction.data {
+            PumpfunInstruction::CreateEvent(create_event) => {
+                println!("\nNew token created: {:#?}", create_event);
+            }
+            PumpfunInstruction::TradeEvent(trade_event) => {
+                if trade_event.sol_amount > 10 * LAMPORTS_PER_SOL {
+                    println!("\nBig trade occured: {:#?}", trade_event);
+                }
+            }
+            PumpfunInstruction::CompleteEvent(complete_event) => {
+                println!("\nBonded: {:#?}", complete_event);
+            }
+            _ => {
+                // Ignored
+            }
+        };
+
+        Ok(())
+    }
+} 

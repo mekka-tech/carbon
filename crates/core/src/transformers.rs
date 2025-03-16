@@ -110,6 +110,7 @@ pub fn extract_instructions_with_metadata(
                     InstructionMetadata {
                         transaction_metadata: transaction_metadata.clone(),
                         stack_height: 1,
+                        index: i,
                     },
                     solana_sdk::instruction::Instruction {
                         program_id,
@@ -148,6 +149,7 @@ pub fn extract_instructions_with_metadata(
                                     InstructionMetadata {
                                         transaction_metadata: transaction_metadata.clone(),
                                         stack_height: inner_instruction.stack_height.unwrap_or(1),
+                                        index: i,
                                     },
                                     solana_sdk::instruction::Instruction {
                                         program_id,
@@ -198,6 +200,7 @@ pub fn extract_instructions_with_metadata(
                     InstructionMetadata {
                         transaction_metadata: transaction_metadata.clone(),
                         stack_height: 1,
+                        index: i,
                     },
                     solana_sdk::instruction::Instruction {
                         program_id,
@@ -240,6 +243,7 @@ pub fn extract_instructions_with_metadata(
                                     InstructionMetadata {
                                         transaction_metadata: transaction_metadata.clone(),
                                         stack_height: inner_instruction.stack_height.unwrap_or(1),
+                                        index: i,
                                     },
                                     solana_sdk::instruction::Instruction {
                                         program_id,
@@ -351,6 +355,7 @@ pub fn unnest_parsed_instructions<T: InstructionDecoderCollection>(
             InstructionMetadata {
                 transaction_metadata: transaction_metadata.clone(),
                 stack_height,
+                index: parsed_instruction.index,
             },
             parsed_instruction.instruction,
         ));
