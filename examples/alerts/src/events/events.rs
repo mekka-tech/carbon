@@ -54,3 +54,27 @@ pub struct NewTokenEventPayload {
     pub mint: String,
     pub owner: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SwapType {
+    Buy,
+    Sell,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwapResult {
+    pub swap_type: SwapType,
+    pub token_amount: String,
+    pub wsol_amount: String,
+    pub price: String,
+    pub price_usd: String,
+    pub total_usd: String,
+    pub is_swandwich_attack: bool,
+    pub tx_hash: String,
+    pub user: String,
+    pub mint: String,
+    pub pool: String,
+    pub protocol: ProtocolType,
+    pub timestamp: i64,
+}

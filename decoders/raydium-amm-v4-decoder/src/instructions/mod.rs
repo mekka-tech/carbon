@@ -17,6 +17,7 @@ pub mod update_config_account;
 pub mod withdraw;
 pub mod withdraw_pnl;
 pub mod withdraw_srm;
+pub mod swap_base;
 
 #[derive(
     carbon_core::InstructionType,

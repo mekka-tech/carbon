@@ -28,3 +28,8 @@ tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true }
 yellowstone-grpc-client = { workspace = true }
 yellowstone-grpc-proto = { workspace = true }
+
+[dependencies.rustls]
+default-features = false
+features = ["std", "aws_lc_rs", "ring"]
+version = "0.23.0"

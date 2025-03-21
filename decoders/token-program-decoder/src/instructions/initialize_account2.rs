@@ -7,6 +7,7 @@ pub struct InitializeAccount2 {
     pub owner: solana_sdk::pubkey::Pubkey,
 }
 
+#[derive(Debug, Clone, CarbonDeserialize)]
 pub struct InitializeAccount2Accounts {
     pub account: solana_sdk::pubkey::Pubkey,
     pub mint: solana_sdk::pubkey::Pubkey,

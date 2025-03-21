@@ -9,6 +9,7 @@ pub struct InitializeMint2 {
     pub freeze_authority: Option<solana_sdk::pubkey::Pubkey>,
 }
 
+#[derive(Debug, Clone, CarbonDeserialize)]
 pub struct InitializeMint2Accounts {
     pub mint: solana_sdk::pubkey::Pubkey,
 }

@@ -24,10 +24,10 @@ use {
         error::CarbonResult, metrics::MetricsCollection, processor::Processor,
         transaction::TransactionMetadata,
     },
-    async_trait::async_trait,
-    serde::Deserialize,
-    solana_sdk::{inner_instruction::InnerInstruction, instruction::{AccountMeta, Instruction}, pubkey::Pubkey},
+    solana_sdk::{instruction::{AccountMeta, Instruction}, pubkey::Pubkey},
     std::{ops::Deref, sync::Arc},
+    serde::Deserialize,
+    async_trait::async_trait,
 };
 
 /// Metadata associated with a specific instruction, including transaction-level

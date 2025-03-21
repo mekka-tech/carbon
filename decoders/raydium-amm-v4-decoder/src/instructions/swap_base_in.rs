@@ -9,30 +9,8 @@ pub struct SwapBaseIn {
     pub minimum_amount_out: u64,
 }
 
-#[derive(Debug)]
-pub struct SwapBaseInInstructionAccounts {
-    pub token_program: solana_sdk::pubkey::Pubkey,
-    pub amm: solana_sdk::pubkey::Pubkey,
-    pub amm_authority: solana_sdk::pubkey::Pubkey,
-    pub amm_open_orders: solana_sdk::pubkey::Pubkey,
-    pub amm_target_orders: Option<solana_sdk::pubkey::Pubkey>,
-    pub pool_coin_token_account: solana_sdk::pubkey::Pubkey,
-    pub pool_pc_token_account: solana_sdk::pubkey::Pubkey,
-    pub serum_program: solana_sdk::pubkey::Pubkey,
-    pub serum_market: solana_sdk::pubkey::Pubkey,
-    pub serum_bids: solana_sdk::pubkey::Pubkey,
-    pub serum_asks: solana_sdk::pubkey::Pubkey,
-    pub serum_event_queue: solana_sdk::pubkey::Pubkey,
-    pub serum_coin_vault_account: solana_sdk::pubkey::Pubkey,
-    pub serum_pc_vault_account: solana_sdk::pubkey::Pubkey,
-    pub serum_vault_signer: solana_sdk::pubkey::Pubkey,
-    pub uer_source_token_account: solana_sdk::pubkey::Pubkey,
-    pub uer_destination_token_account: solana_sdk::pubkey::Pubkey,
-    pub user_source_owner: solana_sdk::pubkey::Pubkey,
-}
-
 impl carbon_core::deserialize::ArrangeAccounts for SwapBaseIn {
-    type ArrangedAccounts = SwapBaseInInstructionAccounts;
+    type ArrangedAccounts = crate::instructions::swap_base::SwapBaseInstructionAccounts;
 
     fn arrange_accounts(
         accounts: &[solana_sdk::instruction::AccountMeta],
@@ -45,7 +23,7 @@ impl carbon_core::deserialize::ArrangeAccounts for SwapBaseIn {
                     return None;
                 };
 
-                Some(SwapBaseInInstructionAccounts {
+                Some(crate::instructions::swap_base::SwapBaseInstructionAccounts {
                     token_program: token_program.pubkey,
                     amm: amm.pubkey,
                     amm_authority: amm_authority.pubkey,
@@ -73,7 +51,7 @@ impl carbon_core::deserialize::ArrangeAccounts for SwapBaseIn {
                     return None;
                 };
 
-                Some(SwapBaseInInstructionAccounts {
+                Some( crate::instructions::swap_base::SwapBaseInstructionAccounts {
                     token_program: token_program.pubkey,
                     amm: amm.pubkey,
                     amm_authority: amm_authority.pubkey,

@@ -6,7 +6,7 @@ use carbon_core::{borsh, CarbonDeserialize};
 pub struct InitializeAccount {
     pub amount: u64,
 }
-
+#[derive(Debug, Clone, CarbonDeserialize)]
 pub struct InitializeAccountAccounts {
     pub account: solana_sdk::pubkey::Pubkey,
     pub mint: solana_sdk::pubkey::Pubkey,

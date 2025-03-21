@@ -115,6 +115,7 @@ thiserror = "1.0.63"
 tokio = { version = "1.43.0" }
 tokio-retry = "0.3.0"
 tokio-util = "0.7.13"
+tokio-rustls = { version = "0.26.2", features = ["default-tls-native-roots"] }
 unicode-xid = "0.2"
 yellowstone-grpc-client = { version = "5.0.0" }
 yellowstone-grpc-proto = { version = "5.0.0" }

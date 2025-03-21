@@ -67,6 +67,10 @@ impl Datasource for YellowstoneGrpcGeyserClient {
         cancellation_token: CancellationToken,
         metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()> {
+        rustls::crypto::aws_lc_rs::default_provider().install_default().map_err(
+            |_err| carbon_core::error::Error::Custom("Failed to install default crypto provider".to_string())
+        )?;
+
         let sender = sender.clone();
         let endpoint = self.endpoint.clone();
         let x_token = self.x_token.clone();
@@ -74,7 +78,6 @@ impl Datasource for YellowstoneGrpcGeyserClient {
         let account_filters = self.account_filters.clone();
         let transaction_filters = self.transaction_filters.clone();
         let account_deletions_tracked = self.account_deletions_tracked.clone();
-
         let mut geyser_client = GeyserGrpcClient::build_from_shared(endpoint)
             .map_err(|err| carbon_core::error::Error::FailedToConsumeDatasource(err.to_string()))?
             .x_token(x_token)
@@ -188,7 +191,7 @@ impl Datasource for YellowstoneGrpcGeyserClient {
 
                                             Some(UpdateOneof::Transaction(transaction_update)) => {
                                                 let start_time = std::time::Instant::now();
-
+                                                
                                                 if let Some(transaction_info) =
                                                     transaction_update.transaction
                                                 {
