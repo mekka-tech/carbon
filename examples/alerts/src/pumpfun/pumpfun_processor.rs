@@ -26,7 +26,7 @@ fn time_ago(timestamp: i64) -> String {
     format!("{} ms ago", elapsed.num_milliseconds())
 
 }
-
+const SOL_PRICE: f64 = 131.6;
 // Define the list of valid pump user addresses.
 const PUMP_USERS: &[&str] = &[
     "JDd3hy3gQn2V982mi1zqhNqUw1GfV2UL6g76STojCJPN",
@@ -88,10 +88,11 @@ impl Processor for PumpfunInstructionProcessor {
                     println!("Is Buy: {}", trade_event.is_buy);
                     println!("Token Amount: {}", trade_event.token_amount);
                     println!("Sol Amount: {}", trade_event.sol_amount);
-                    println!("Virtual Sol Reserves: {}", trade_event.virtual_sol_reserves);
-                    println!("Virtual Token Reserves: {}", trade_event.virtual_token_reserves);
-                    println!("Real Sol Reserves: {}", trade_event.real_sol_reserves);
-                    println!("Real Token Reserves: {}", trade_event.real_token_reserves);
+                    let token_price = trade_event.sol_amount / trade_event.token_amount;
+                    let token_price_usd = token_price * SOL_PRICE;
+                    println!("Token Price: {}", token_price_usd);
+                    println!("Market Cap: {}", token_price_usd * 1000000000);
+
                     println!("Hash: https://solscan.io/tx/{}", metadata.transaction_metadata.signature);
                     println!("--------------------------------");
                     
