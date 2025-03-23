@@ -91,7 +91,7 @@ impl Processor for PumpfunInstructionProcessor {
                     let token_price = trade_event.sol_amount / trade_event.token_amount;
                     let token_price_usd = token_price as f64 * SOL_PRICE;
                     println!("Token Price: {}", token_price_usd);
-                    println!("Market Cap: {}", token_price_usd * 1000000000);
+                    println!("Market Cap: {}", token_price_usd * 1000000000 as f64);
 
                     println!("Hash: https://solscan.io/tx/{}", metadata.transaction_metadata.signature);
                     println!("--------------------------------");
