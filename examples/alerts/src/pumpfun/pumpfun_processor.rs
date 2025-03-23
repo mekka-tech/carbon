@@ -89,7 +89,7 @@ impl Processor for PumpfunInstructionProcessor {
                     println!("Token Amount: {}", trade_event.token_amount);
                     println!("Sol Amount: {}", trade_event.sol_amount);
                     let token_price = trade_event.sol_amount / trade_event.token_amount;
-                    let token_price_usd = token_price * SOL_PRICE;
+                    let token_price_usd = token_price as f64 * SOL_PRICE;
                     println!("Token Price: {}", token_price_usd);
                     println!("Market Cap: {}", token_price_usd * 1000000000);
 
