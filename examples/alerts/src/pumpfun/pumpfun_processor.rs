@@ -98,9 +98,9 @@ impl Processor for PumpfunInstructionProcessor {
 
                 if PUMP_USERS.contains(&user_str.as_str()) {
                     if trade_event.is_buy {
-                        order_book.insert(user_str + "-" + trade_event.mint, token_price_usd);
+                        order_book.insert(user_str + "-" + trade_event.mint.to_string().as_str(), token_price_usd);
                     } else {
-                        order_book.remove(&(user_str + "-" + trade_event.mint));
+                        order_book.remove(&(user_str + "-" + trade_event.mint.to_string().as_str()));
                     }
                     println!("Trade occurred: {}", time_ago(trade_event.timestamp));
                     println!("User: {}", user_str);
