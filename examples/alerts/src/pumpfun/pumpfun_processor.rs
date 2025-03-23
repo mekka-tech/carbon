@@ -57,7 +57,7 @@ const PUMP_USERS: &[&str] = &[
 ];
 
 
-const order_book = HashMap::new();
+const ORDER_BOOK: HashMap<String, f64> = HashMap::new();
 
 pub struct PumpfunInstructionProcessor;
 
@@ -98,9 +98,9 @@ impl Processor for PumpfunInstructionProcessor {
 
                 if PUMP_USERS.contains(&user_str.as_str()) {
                     if trade_event.is_buy {
-                        order_book.insert(user_str + "-" + trade_event.mint.to_string().as_str(), token_price_usd);
+                        ORDER_BOOK.insert(user_str + "-" + trade_event.mint.to_string().as_str(), token_price_usd);
                     } else {
-                        order_book.remove(&(user_str + "-" + trade_event.mint.to_string().as_str()));
+                        ORDER_BOOK.remove(&(user_str + "-" + trade_event.mint.to_string().as_str()));
                     }
                     println!("Trade occurred: {}", time_ago(trade_event.timestamp));
                     println!("User: {}", user_str);
