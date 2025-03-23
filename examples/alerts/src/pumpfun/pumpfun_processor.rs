@@ -83,6 +83,18 @@ impl Processor for PumpfunInstructionProcessor {
                 let user_str = trade_event.user.to_string();
                 if PUMP_USERS.contains(&user_str.as_str()) {
                     println!("Trade occurred: {}", time_ago(trade_event.timestamp));
+                    println!("User: {}", user_str);
+                    println!("Token Address: {}", trade_event.mint);
+                    println!("Is Buy: {}", trade_event.is_buy);
+                    println!("Token Amount: {}", trade_event.token_amount);
+                    println!("Sol Amount: {}", trade_event.sol_amount);
+                    println!("Virtual Sol Reserves: {}", trade_event.virtual_sol_reserves);
+                    println!("Virtual Token Reserves: {}", trade_event.virtual_token_reserves);
+                    println!("Real Sol Reserves: {}", trade_event.real_sol_reserves);
+                    println!("Real Token Reserves: {}", trade_event.real_token_reserves);
+                    println!("Hash: https://solscan.io/tx/{}", metadata.transaction_metadata.signature);
+                    println!("--------------------------------");
+                    
                 }
             }
             // PumpfunInstruction::CompleteEvent(complete_event) => {
