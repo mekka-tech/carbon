@@ -92,7 +92,7 @@ impl Processor for PumpfunInstructionProcessor {
                 // Convert token price to USD.
                 let token_price_usd: f64 = token_price_in_sol * SOL_PRICE;
                 // If the total token supply is given as a raw value (with 6 decimals), normalize it:
-                let total_supply_raw: u64 = 1_000_000_000; // For example.
+                let total_supply_raw: u64 = 1_000_000_000_000; // For example.
                 let token_supply: f64 = total_supply_raw as f64 / 1e6;
                 // Then compute the market cap in USD.
                 let market_cap: f64 = token_price_usd * token_supply;
