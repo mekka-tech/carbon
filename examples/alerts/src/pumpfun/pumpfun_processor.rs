@@ -88,10 +88,24 @@ impl Processor for PumpfunInstructionProcessor {
                     println!("Is Buy: {}", trade_event.is_buy);
                     println!("Token Amount: {}", trade_event.token_amount);
                     println!("Sol Amount: {}", trade_event.sol_amount);
-                    let token_price = trade_event.sol_amount / trade_event.token_amount;
-                    let token_price_usd = token_price as f64 * SOL_PRICE;
-                    println!("Token Price: {}", token_price_usd);
-                    println!("Market Cap: {}", token_price_usd * 1000000000 as f64);
+                    // Normalize the raw amounts.
+                    let sol_amount: f64 = trade_event.sol_amount as f64 / 1e9;
+                    let token_amount: f64 = trade_event.token_amount as f64 / 1e6;
+
+                    // Compute the token price in SOL. This tells you how many SOL one token costs.
+                    let token_price_in_sol: f64 = sol_amount / token_amount;
+
+                    // Convert token price to USD.
+                    let token_price_usd: f64 = token_price_in_sol * SOL_PRICE;
+                    println!("Token Price (USD): {}", token_price_usd);
+
+                    // If the total token supply is given as a raw value (with 6 decimals), normalize it:
+                    let total_supply_raw: u64 = 1_000_000_000; // For example.
+                    let token_supply: f64 = total_supply_raw as f64 / 1e6;
+
+                    // Then compute the market cap in USD.
+                    let market_cap: f64 = token_price_usd * token_supply;
+                    println!("Market Cap (USD): {}", market_cap);
 
                     println!("Hash: https://solscan.io/tx/{}", metadata.transaction_metadata.signature);
                     println!("--------------------------------");
