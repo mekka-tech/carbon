@@ -11,11 +11,11 @@ pub enum Side {
 
 #[derive(Debug, Clone)]
 pub struct Position {
-    user: String,
-    mint: String,
-    side: Side,         // Side at which the position was opened.
-    open_price: f64,    // Average price at open (in USD).
-    quantity: f64,      // Quantity of tokens held.
+    pub user: String,
+    pub mint: String,
+    pub side: Side,         // Side at which the position was opened.
+    pub open_price: f64,    // Average price at open (in USD).
+    pub quantity: f64,      // Quantity of tokens held.
     pub current_price: f64, // Latest market price (for PNL calculations).
 }
 
