@@ -101,9 +101,27 @@ impl Processor for PumpfunInstructionProcessor {
 
                 let mut order_book = ORDER_BOOK.lock().unwrap();
 
-                match order_book.has_position(trade_event.mint.to_string().as_str()) {
+                match order_book.get_position(trade_event.mint.to_string().as_str()) {
                     Some(position) => {
-                        println!("Position Tracking possible PNL: bought Price: {} current Price: {} DIFF: {}", position.current_price, token_price_usd, token_price_usd - position.current_price);
+                        // Make sure that position.current_price is not zero to avoid division by zero.
+                        if position.current_price != 0.0 {
+                            let diff = token_price_usd - position.current_price;
+                            let pct_diff = (diff / position.current_price) * 100.0;
+                            // If you have a position quantity, you can also calculate total PNL.
+                            // For example, if position has a `quantity` field:
+                            let total_pnl = diff * position.quantity;
+                            println!(
+                                "Position Tracking - Bought Price: ${:.2}, Current Price: ${:.2}, Diff: ${:.2} ({:.2}%), Possible PNL: ${:.2}",
+                                position.current_price,
+                                token_price_usd,
+                                diff,
+                                pct_diff,
+                                total_pnl
+                            );
+                        } else {
+                            println!("Position Tracking: Bought Price is zero, cannot compute difference.");
+                        }
+
                     }
                     None => {
                         // println!("No position tracking possible");
