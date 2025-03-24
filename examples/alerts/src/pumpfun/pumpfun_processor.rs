@@ -57,9 +57,6 @@ const PUMP_USERS: &[&str] = &[
     "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
 ];
 
-
-const ORDER_BOOK: HashMap<String, f64> = HashMap::new();
-
 pub struct PumpfunInstructionProcessor;
 
 #[async_trait]
@@ -98,11 +95,6 @@ impl Processor for PumpfunInstructionProcessor {
                 let market_cap: f64 = token_price_usd * token_supply;
 
                 if PUMP_USERS.contains(&user_str.as_str()) {
-                    if trade_event.is_buy {
-                        ORDER_BOOK.insert(user_str + "-" + trade_event.mint.to_string().as_str(), token_price_usd);
-                    } else {
-                        ORDER_BOOK.remove(&(user_str + "-" + trade_event.mint.to_string().as_str()));
-                    }
                     println!("Trade occurred: {}", time_ago(trade_event.timestamp));
                     println!("User: {}", user_str);
                     println!("Token Address: {}", trade_event.mint);
