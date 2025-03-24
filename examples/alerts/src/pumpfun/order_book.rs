@@ -18,7 +18,7 @@ pub struct Position {
     side: Side,     // Side at which the position was opened.
     open_price: f64,   // Average price at open (in USD).
     quantity: f64,     // Quantity of tokens held.
-    current_price: f64 // Latest market price (for PNL calculations).
+    pub current_price: f64 // Latest market price (for PNL calculations).
 }
 
 impl Position {
@@ -35,12 +35,14 @@ impl Position {
 #[derive(Debug)]
 pub struct OrderBook {
     positions: HashMap<(String, String), Position>,
+    keys: HashMap<String, String>,
 }
 
 impl OrderBook {
     fn new() -> Self {
         OrderBook {
             positions: HashMap::new(),
+            keys: HashMap::new(),
         }
     }
 
@@ -82,6 +84,7 @@ impl OrderBook {
                     // The trade quantity is enough to close the position completely.
                     let realized_pnl = pos.pnl(trade_price);
                     self.positions.remove(&key);
+                    self.keys.remove(&mint.to_string());
                     Some(realized_pnl)
                 } else {
                     // Partial close: reduce the position quantity and calculate PNL for the closed portion.
@@ -97,40 +100,33 @@ impl OrderBook {
                 }
             }
         } else {
-            // No existing position: open a new one with the trade's side.
-            let pos = Position {
-                user: user.to_string(),
+            if trade_side == Side::Buy {
+                // No existing position: open a new one with the trade's side.
+                let pos = Position {
+                    user: user.to_string(),
                 mint: mint.to_string(),
                 side: trade_side,
                 open_price: trade_price,
                 quantity: trade_quantity,
                 current_price: trade_price,
-            };
-            self.positions.insert(key, pos);
-            None
+                };
+                self.keys.insert(mint.to_string().clone(), key.to_string().clone());
+                self.positions.insert(key, pos);
+                None
+            } else {
+                None
+            }
         }
     }
+
+    pub fn has_position(&self, mint: &str) -> Option<&Position> {
+        return self.keys.get_key_value(mint).map(|(_, position)| position);
+    }
+
 }
 
 // Create a global static order book for use in our price checker.
 pub static ORDER_BOOK: Lazy<Mutex<OrderBook>> = Lazy::new(|| Mutex::new(OrderBook::new()));
+// Create a global static order book for use in our price checker.
+pub static ORDER_BOOK_KEYS: Lazy<Mutex<HashMap<String, String>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
-// fn main() {
-//     // Example usage:
-//     // Let's assume "Alice" buys 100 tokens at $10 each (a long position).
-//     {
-//         let mut ob = ORDER_BOOK.lock().unwrap();
-//         // A buy trade means the user is going long.
-//         ob.process_trade("Alice", "TOKEN", Side::Buy, 10.0, 100.0);
-//     }
-//     // Now, later, "Alice" sells 100 tokens at $12 each, which should close her position.
-//     {
-//         let mut ob = ORDER_BOOK.lock().unwrap();
-//         if let Some(pnl) = ob.process_trade("Alice", "TOKEN", Side::Sell, 12.0, 100.0) {
-//             println!("Alice's PNL from closing position: ${}", pnl);
-//         }
-//     }
-    
-//     // In your price checker, you can now access ORDER_BOOK to check open positions,
-//     // update positions with new trade prices, and compute unrealized PNL.
-// }

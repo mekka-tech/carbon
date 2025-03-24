@@ -99,11 +99,22 @@ impl Processor for PumpfunInstructionProcessor {
                 // Then compute the market cap in USD.
                 let market_cap: f64 = token_price_usd * total_supply as f64;
 
+                let mut order_book = ORDER_BOOK.lock().unwrap();
+
+                match order_book.has_position(trade_event.mint.to_string().as_str()) {
+                    Some(position) => {
+                        println!("Position Tracking possible PNL: bought Price: {} current Price: {} DIFF: {}", position.current_price, token_price_usd, token_price_usd - position.current_price);
+                    }
+                    None => {
+                        // println!("No position tracking possible");
+                    }
+                }
+
                 if PUMP_USERS.contains(&user_str.as_str()) {
                     if trade_event.is_buy {
-                        ORDER_BOOK.lock().unwrap().process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
+                        order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
                     } else {
-                        let pnl = ORDER_BOOK.lock().unwrap().process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
+                        let pnl = order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
                         println!("PNL: {}", pnl.unwrap_or(0.0));
                     }
                     println!("Trade occurred: {}", time_ago(trade_event.timestamp));
@@ -117,7 +128,6 @@ impl Processor for PumpfunInstructionProcessor {
 
                     println!("Hash: https://solscan.io/tx/{}", metadata.transaction_metadata.signature);
                     println!("--------------------------------");
-                    
                 }
             }
             // PumpfunInstruction::CompleteEvent(complete_event) => {
