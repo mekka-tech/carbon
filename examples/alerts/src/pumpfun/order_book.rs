@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use once_cell::sync::Lazy;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Side {
+pub enum Side {
     Buy,
     Sell,
 }
@@ -12,7 +12,7 @@ enum Side {
 /// For simplicity, we assume that a positive quantity means a long position,
 /// and that a trade in the opposite side reduces the position.
 #[derive(Debug, Clone)]
-struct Position {
+pub struct Position {
     user: String,
     mint: String,
     side: Side,     // Side at which the position was opened.
@@ -33,7 +33,7 @@ impl Position {
 
 /// OrderBook holds positions keyed by (user, mint).
 #[derive(Debug)]
-struct OrderBook {
+pub struct OrderBook {
     positions: HashMap<(String, String), Position>,
 }
 
