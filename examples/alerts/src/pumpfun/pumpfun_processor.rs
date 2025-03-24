@@ -1,5 +1,5 @@
 use {
-    crate::pumpfun::order_book::ORDER_BOOK,
+    crate::pumpfun::order_book::{ORDER_BOOK, Side},
     crate::events::{
         events::{ProtocolType, SummarizedTokenBalance, SwapResult, SwapType},
         rabbit::RabbitMQPublisher,
