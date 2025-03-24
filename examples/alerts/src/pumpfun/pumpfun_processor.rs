@@ -1,4 +1,5 @@
 use {
+    crate::pumpfun::order_book::ORDER_BOOK,
     crate::events::{
         events::{ProtocolType, SummarizedTokenBalance, SwapResult, SwapType},
         rabbit::RabbitMQPublisher,
@@ -16,7 +17,10 @@ use {
     std::collections::HashMap,
     std::sync::Arc,
     chrono::{DateTime, Utc, TimeZone},
+    pumpfun::order_book::OrderBook,
 };
+
+
 
 fn time_ago(timestamp: i64) -> String {
     // Convert the Unix timestamp (in seconds) to a DateTime<Utc>.
@@ -57,6 +61,9 @@ const PUMP_USERS: &[&str] = &[
     "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
 ];
 
+
+// const ORDER_BOOK: HashMap<String, f64> = HashMap::new();
+
 pub struct PumpfunInstructionProcessor;
 
 #[async_trait]
@@ -88,13 +95,17 @@ impl Processor for PumpfunInstructionProcessor {
                 let token_price_in_sol: f64 = sol_amount / token_amount;
                 // Convert token price to USD.
                 let token_price_usd: f64 = token_price_in_sol * SOL_PRICE;
-                // If the total token supply is given as a raw value (with 6 decimals), normalize it:
-                let total_supply_raw: u64 = 1_000_000_000_000; // For example.
-                let token_supply: f64 = total_supply_raw as f64 / 1e6;
+
+                let total_supply: u64 = 1_000_000_000; // For example.
                 // Then compute the market cap in USD.
-                let market_cap: f64 = token_price_usd * token_supply;
+                let market_cap: f64 = token_price_usd * total_supply as f64;
 
                 if PUMP_USERS.contains(&user_str.as_str()) {
+                    if trade_event.is_buy {
+                        ORDER_BOOK.lock().unwrap().process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
+                    } else {
+                        ORDER_BOOK.lock().unwrap().process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
+                    }
                     println!("Trade occurred: {}", time_ago(trade_event.timestamp));
                     println!("User: {}", user_str);
                     println!("Token Address: {}", trade_event.mint);

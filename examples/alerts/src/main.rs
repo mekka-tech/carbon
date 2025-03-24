@@ -5,6 +5,7 @@ mod raydium {
 }
 mod pumpfun {
     pub mod pumpfun_processor;
+    pub mod order_book;
 }
 mod token {
     pub mod token_processor;
