@@ -119,8 +119,13 @@ impl OrderBook {
         }
     }
 
-    pub fn has_position(&self, mint: &str) -> Option<&Position> {
-        return self.keys.get_key_value(mint).map(|(_, position)| position);
+    pub fn get_position(&self, mint: &str) -> Option<&Position> {
+        if self.keys.contains_key(mint) {
+            let key = self.keys.get(mint).unwrap();
+            self.positions.get(key)
+        } else {
+            None
+        }
     }
 
 }
