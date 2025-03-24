@@ -103,7 +103,8 @@ impl Processor for PumpfunInstructionProcessor {
                     if trade_event.is_buy {
                         ORDER_BOOK.lock().unwrap().process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
                     } else {
-                        ORDER_BOOK.lock().unwrap().process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
+                        let pnl = ORDER_BOOK.lock().unwrap().process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
+                        println!("PNL: {}", pnl.unwrap_or(0.0));
                     }
                     println!("Trade occurred: {}", time_ago(trade_event.timestamp));
                     println!("User: {}", user_str);
