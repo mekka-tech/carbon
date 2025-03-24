@@ -111,7 +111,7 @@ impl Processor for PumpfunInstructionProcessor {
                             // For example, if position has a `quantity` field:
                             let total_pnl = diff * position.quantity;
                             println!(
-                                "Position Tracking - [{}] \nBought Price: ${:.2}, Current Price: ${:.2}, Diff: ${:.2} ({:.2}%), Possible PNL: ${:.2}",
+                                "Position Tracking - [{}] \nBought Price: ${:.6}, Current Price: ${:.6}, Diff: ${:.6} ({:.6}%), Possible PNL: ${:.6}",
                                 position.user,
                                 position.current_price,
                                 token_price_usd,
