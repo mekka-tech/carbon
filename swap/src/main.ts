@@ -1,11 +1,23 @@
 import * as WebSocket from 'ws';
-import { OrderBook, Side } from './services/order.book';
+import { OrderBook, OrderStatus, Side } from './services/order.book';
+import axios from 'axios';
+import { DiscordWebhookService } from './services/discord.webhook';
 
 // Create a WebSocket server that listens on port 3012
 const wss = new WebSocket.Server({ port: 3012 });
 
 // Initialize the order book
 const orderBook = new OrderBook();
+const discordWebhook = new DiscordWebhookService();
+
+
+setInterval(() => {
+  const closedOrders = orderBook.getClosedOrders();
+  if (closedOrders.length > 0) {
+    discordWebhook.sendPnlSummary(closedOrders);
+  }
+}, 60_000);
+
 
 console.log('WebSocket server started on port 3012');
 

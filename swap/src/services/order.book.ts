@@ -118,5 +118,9 @@ export class OrderBook {
         return order;
     }
     
+
+    getClosedOrders(): Order[] {
+        return Array.from(this.orders.values()).filter(order => order.status === OrderStatus.CLOSED);
+    }
     
 } 
