@@ -19,7 +19,7 @@ pub struct SwapOrder {
 }
 
 pub struct SwapPublisher {
-  socket: WebSocket<MaybeTlsStream<Read + Write>>,
+  socket: WebSocket<MaybeTlsStream<dyn Read + Write>>,
 }
 
 impl SwapPublisher {
