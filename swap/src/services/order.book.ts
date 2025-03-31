@@ -55,6 +55,7 @@ export class OrderBook {
     processTrade(mint: string, side: Side, price: number, amount: number, origin: string, signature: string, bondingCurve: string, associatedBondingCurve: string): Order | undefined {
         const order = this._getOrder(mint);
         if (!order && side === Side.BUY) {
+            console.log('Order not found, added PENDING ORDER')
             return this._addOrder({
                 mint,
                 amount_bought: amount,
