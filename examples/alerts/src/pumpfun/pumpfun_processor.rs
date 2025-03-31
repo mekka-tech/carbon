@@ -18,7 +18,7 @@ use {
     std::sync::Arc,
     chrono::{DateTime, Utc, TimeZone},
 };
-use tungstenite::WebSocket;
+use tungstenite::{WebSocket, stream::MaybeTlsStream};
 
 
 
@@ -69,12 +69,12 @@ const PUMP_USERS: &[&str] = &[
 // const ORDER_BOOK: HashMap<String, f64> = HashMap::new();
 
 pub struct PumpfunInstructionProcessor {
-    pub socket: WebSocket,
+    pub socket: WebSocket<MaybeTlsStream<Any>>,
 }
 
 impl PumpfunInstructionProcessor {
-    pub fn attach_socket(&mut self, socket: WebSocket) {
-        self.socket = socket;
+    pub fn attach_socket(&mut self, socket: WebSocket<MaybeTlsStream<Any>>) {
+        PumpfunInstructionProcessor::socket = socket;
     }
 }
 

@@ -44,9 +44,6 @@ export async function pumpFunSwap(
     _amount: number,
     gasFee: number,
     _slippage: number,
-    isFeeBurn: boolean,
-    username: string,
-    isToken2022: boolean,
     mevFee: number,
 ): Promise<any> {
     try {

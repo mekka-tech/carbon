@@ -9,7 +9,6 @@ fn main() {
   for (header, _value) in response.headers() {
       println!("* {header}");
   }
-
   socket.send(Message::Text("Hello WebSocket".into())).unwrap();
   loop {
       let msg = socket.read().expect("Error reading message");
