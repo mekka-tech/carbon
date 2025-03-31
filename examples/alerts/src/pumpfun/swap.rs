@@ -40,7 +40,7 @@ impl SwapPublisher {
     swap_order: &SwapOrder,
   ) -> CarbonResult<()> {
     let message = serde_json::to_string(&swap_order).unwrap_or("{}".to_string());
-    self.socket.send(Message::Text(message.into())).await?;
+    self.socket.send(Message::Text(message.into()));
     Ok(())
   }
 
