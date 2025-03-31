@@ -29,18 +29,19 @@ impl Position {
     }
 }
 
-/// OrderBook holds positions keyed by (user, mint) and a secondary mapping from mint to key.
+/// OrderBook holds positions keyed by (user, mint) and a secondary mapping from mint to keys.
 #[derive(Debug)]
 pub struct OrderBook {
     positions: HashMap<(String, String), Position>,
-    keys: HashMap<String, (String, String)>, // maps mint -> (user, mint)
+    // Maps mint -> list of (user, mint) keys that have positions for this mint
+    mint_keys: HashMap<String, Vec<(String, String)>>,
 }
 
 impl OrderBook {
     fn new() -> Self {
         OrderBook {
             positions: HashMap::new(),
-            keys: HashMap::new(),
+            mint_keys: HashMap::new(),
         }
     }
 
@@ -75,7 +76,15 @@ impl OrderBook {
                     // Trade closes the position completely.
                     let realized_pnl = pos.pnl(trade_price);
                     self.positions.remove(&key);
-                    self.keys.remove(mint);
+                    
+                    // Remove key from mint_keys
+                    if let Some(keys) = self.mint_keys.get_mut(mint) {
+                        keys.retain(|k| k != &key);
+                        if keys.is_empty() {
+                            self.mint_keys.remove(mint);
+                        }
+                    }
+                    
                     Some(realized_pnl)
                 } else {
                     // Partial close.
@@ -100,7 +109,13 @@ impl OrderBook {
                     quantity: trade_quantity,
                     current_price: trade_price,
                 };
-                self.keys.insert(mint.to_string(), key.clone());
+                
+                // Add key to mint_keys
+                self.mint_keys
+                    .entry(mint.to_string())
+                    .or_insert_with(Vec::new)
+                    .push(key.clone());
+                
                 self.positions.insert(key, pos);
                 None
             } else {
@@ -110,9 +125,28 @@ impl OrderBook {
         }
     }
 
-    /// Retrieve a position by mint address.
-    pub fn get_position(&self, mint: &str) -> Option<&Position> {
-        self.keys.get(mint).and_then(|key| self.positions.get(key))
+    /// Retrieve a position by user and mint address.
+    pub fn get_position(&self, user: &str, mint: &str) -> Option<&Position> {
+        let key = (user.to_string(), mint.to_string());
+        self.positions.get(&key)
+    }
+    
+    /// Retrieve all positions for a given mint address.
+    pub fn get_positions_by_mint(&self, mint: &str) -> Vec<&Position> {
+        match self.mint_keys.get(mint) {
+            Some(keys) => keys
+                .iter()
+                .filter_map(|key| self.positions.get(key))
+                .collect(),
+            None => Vec::new(),
+        }
+    }
+    
+    /// Retrieve the first position for a given mint (for backward compatibility).
+    pub fn get_position_by_mint(&self, mint: &str) -> Option<&Position> {
+        self.mint_keys.get(mint)
+            .and_then(|keys| keys.first())
+            .and_then(|key| self.positions.get(key))
     }
 }
 

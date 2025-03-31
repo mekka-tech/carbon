@@ -64,6 +64,11 @@ const PUMP_USERS: &[&str] = &[
     "CkMbUezSZm6eteRBg5vJLDmxXL4YcSPT6zJtrBwjDWU4",
 ];
 
+const OUR_WALLETS: &[&str] = &[
+    "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
+    "CkMbUezSZm6eteRBg5vJLDmxXL4YcSPT6zJtrBwjDWU4",
+];
+
 // const PUMP_USERS: &[&str] = &[
 //     "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
 // ];
@@ -145,9 +150,10 @@ impl Processor for PumpfunInstructionProcessor {
 
                 let mut order_book = ORDER_BOOK.lock().unwrap();
 
-                match order_book.get_position(trade_event.mint.to_string().as_str()) {
-                    Some(position) => {
-                        // Make sure that position.current_price is not zero to avoid division by zero.
+                if OUR_WALLETS.contains(&user_str.as_str()) {
+                    match order_book.get_position(user_str.as_str(), trade_event.mint.to_string().as_str()) {
+                        Some(position) => {
+                            // Make sure that position.current_price is not zero to avoid division by zero.
                         if position.current_price != 0.0 {
                             let diff = token_price_usd - position.current_price;
                             let pct_diff = (diff / position.current_price) * 100.0;
@@ -172,9 +178,7 @@ impl Processor for PumpfunInstructionProcessor {
                     None => {
                         // println!("No position tracking possible");
                     }
-                }
-
-                if PUMP_USERS.contains(&user_str.as_str()) {
+                    }
 
                     if trade_event.is_buy {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
@@ -182,6 +186,9 @@ impl Processor for PumpfunInstructionProcessor {
                         let pnl = order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
                         println!("PNL: {}", pnl.unwrap_or(0.0));
                     }
+                }
+
+                if PUMP_USERS.contains(&user_str.as_str()) {
                     println!("Trade occurred: {}", time_ago(trade_event.timestamp));
                     println!("User: {}", user_str);
                     println!("Token Address: {}", trade_event.mint);
