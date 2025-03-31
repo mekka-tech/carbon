@@ -4,7 +4,7 @@ import { wait } from '../utils/wait'
 
 const MAX_CHECK_JITO = 20
 
-type Region = 'ams' | 'ger' | 'ny' | 'tokyo' // "default" |
+type Region = 'ams' | 'ger' | 'ny' | 'tokyo' | 'default'
 
 // Region => Endpoint
 export const endpoints = {
@@ -36,12 +36,12 @@ export class JitoBundleService {
 
     // constructor(_region: Region) {
     constructor() {
-        this.endpoint = endpoints.ger
+        this.endpoint = endpoints.default
         console.log('JitoRegion', this.endpoint)
     }
 
     updateRegion() {
-        this.endpoint = endpoints.ger
+        this.endpoint = endpoints.default
     }
     async sendBundle(serializedTransaction: Uint8Array) {
         const encodedTx = bs58.encode(serializedTransaction)

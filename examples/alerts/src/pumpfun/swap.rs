@@ -23,6 +23,8 @@ pub struct SwapOrder {
   pub associated_bonding_curve: String,
   pub decimal: u8,
   pub is_buy: bool,
+  pub origin: String,
+  pub timestamp: u64,
 }
 
 pub struct SwapPublisher {

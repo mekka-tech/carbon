@@ -61,11 +61,9 @@ const PUMP_USERS: &[&str] = &[
     "EaVboaPxFCYanjoNWdkxTbPvt57nhXGu5i6m9m6ZS2kK",
     "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
     "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
-    "CkMbUezSZm6eteRBg5vJLDmxXL4YcSPT6zJtrBwjDWU4",
 ];
 
 const OUR_WALLETS: &[&str] = &[
-    "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
     "CkMbUezSZm6eteRBg5vJLDmxXL4YcSPT6zJtrBwjDWU4",
 ];
 
@@ -109,6 +107,8 @@ impl Processor for PumpfunInstructionProcessor {
                             associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
                             decimal: 6,
                             is_buy: true,
+                            origin: "buy".to_string(),
+                            timestamp: Utc::now().timestamp(),
                         }).unwrap();
                         socket.socket.send(Message::Text(body.into())).unwrap_or(());
                     }
@@ -128,6 +128,8 @@ impl Processor for PumpfunInstructionProcessor {
                             associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
                             decimal: 6,
                             is_buy: false,
+                            origin: "sell".to_string(),
+                            timestamp: Utc::now().timestamp(),
                         }).unwrap();
                         socket.socket.send(Message::Text(body.into())).unwrap_or(());
                     }
@@ -150,53 +152,64 @@ impl Processor for PumpfunInstructionProcessor {
 
                 let mut order_book = ORDER_BOOK.lock().unwrap();
 
-                if OUR_WALLETS.contains(&user_str.as_str()) {
-                    match order_book.get_position(user_str.as_str(), trade_event.mint.to_string().as_str()) {
-                        Some(position) => {
-                            // Make sure that position.current_price is not zero to avoid division by zero.
-                        if position.current_price != 0.0 {
-                            let diff = token_price_usd - position.current_price;
-                            let pct_diff = (diff / position.current_price) * 100.0;
-                            // If you have a position quantity, you can also calculate total PNL.
-                            // For example, if position has a `quantity` field:
-                            let total_pnl = diff * position.quantity;
+                match order_book.get_position(user_str.as_str(), trade_event.mint.to_string().as_str()) {
+                    Some(position) => {
+                        // Make sure that position.current_price is not zero to avoid division by zero.
+                    if position.current_price != 0.0 {
+                        let diff = token_price_usd - position.current_price;
+                        let pct_diff = (diff / position.current_price) * 100.0;
+                        // If you have a position quantity, you can also calculate total PNL.
+                        // For example, if position has a `quantity` field:
+                        let total_pnl = diff * position.quantity;
 
-                            if (pct_diff <= 10.0) {
-                                println!("STOP LOSS, Possible PNL: ${:.6}", total_pnl);
-                            } else if (pct_diff >= 30.0) {
-                                println!("TAKE PROFIT, Possible PNL: ${:.6}", total_pnl);
-                            }
-
-                            println!(
-                                "[{}] Position Tracking - [{}] \nBought Price: ${:.6}, Current Price: ${:.6}, Diff: ${:.6} ({:.6}%), Possible PNL: ${:.6}",
-                                metadata.transaction_metadata.slot,
-                                position.user,
-                                position.current_price,
-                                token_price_usd,
-                                diff,
-                                pct_diff,
-                                total_pnl
-                            );
-                        } else {
-                            println!("Position Tracking: Bought Price is zero, cannot compute difference.");
+                        
+                        if (pct_diff <= 10.0 || pct_diff >= 30.0) {
+                            println!("STOP LOSS, Possible PNL: ${:.6}", total_pnl);
+                            let mut socket = SOCKET.lock().unwrap();
+                            let body = serde_json::to_string(&SwapOrder {
+                                mint: trade_event.mint.to_string(),
+                                amount: "".to_string(),
+                                sol_amount: "".to_string(),
+                                bonding_curve: "".to_string(),
+                                associated_bonding_curve: "".to_string(),
+                                decimal: 6,
+                                is_buy: false,
+                                origin: if pct_diff <= 10.0 { "stop_loss".to_string() } else { "take_profit".to_string() },
+                                timestamp: Utc::now().timestamp(),
+                            }).unwrap();
+                            socket.socket.send(Message::Text(body.into())).unwrap_or(());
                         }
 
-                    }
-                    None => {
-                        // println!("No position tracking possible");
-                    }
+
+                        println!("Trade occurred: {}", time_ago(trade_event.timestamp));
+                        println!(
+                            "[{}] Position Tracking - [{}] \nBought Price: ${:.6}, Current Price: ${:.6}, Diff: ${:.6} ({:.6}%), Possible PNL: ${:.6}",
+                            metadata.transaction_metadata.slot,
+                            position.user,
+                            position.current_price,
+                            token_price_usd,
+                            diff,
+                            pct_diff,
+                            total_pnl
+                        );
+                    } else {
+                        println!("Position Tracking: Bought Price is zero, cannot compute difference.");
                     }
 
+                }
+                None => {
+                    // println!("No position tracking possible");
+                }
+                }
+
+                if OUR_WALLETS.contains(&user_str.as_str()) {
                     if trade_event.is_buy {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
                     } else {
                         let pnl = order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
                         println!("PNL: {}", pnl.unwrap_or(0.0));
                     }
-                }
-
-                if PUMP_USERS.contains(&user_str.as_str()) {
-                    println!("Trade occurred: {}", time_ago(trade_event.timestamp));
+                
                     println!("User: {}", user_str);
                     println!("Token Address: {}", trade_event.mint);
                     println!("Is Buy: {}", trade_event.is_buy);

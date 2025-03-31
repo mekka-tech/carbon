@@ -1,0 +1,165 @@
+export enum OrderStatus {
+    OPEN = 'open',
+    CLOSED = 'closed'
+}
+
+export enum Side {
+    BUY = 'buy',
+    SELL = 'sell'
+}
+
+export interface Order {
+    creator: string;
+    mint: string;
+    amount_bought: number;
+    amount_sold: number;
+    price_bought: number;
+    price_sold: number;
+    timestamp_bought: number;
+    timestamp_sold: number;
+    pnl: number;
+    status: OrderStatus;
+}
+
+export class OrderBook {
+    private orders: Map<string, Map<string, Order>> = new Map();
+    
+    constructor() {
+        console.log('Order book initialized');
+    }
+    
+    // Get an order by creator and mint
+    _getOrder(creator: string, mint: string): Order | undefined {
+        const creatorOrders = this.orders.get(creator);
+        if (!creatorOrders) return undefined;
+        return creatorOrders.get(mint);
+    }
+    
+    // Add or update an order
+    _addOrder(creator: string, order: Order): Order {
+        if (!this.orders.has(creator)) {
+            this.orders.set(creator, new Map());
+        }
+        this.orders.get(creator)!.set(order.mint, order);
+        return order;
+    }
+    
+    // Process a trade
+    processTrade(creator: string, mint: string, side: Side, price: number, amount: number): Order | undefined {
+        const order = this._getOrder(creator, mint);
+        if (!order && side === Side.BUY) {
+            return this._addOrder(creator, {
+                creator,
+                mint,
+                amount_bought: amount,
+                amount_sold: 0,
+                price_bought: price,
+                price_sold: 0,
+                timestamp_bought: Date.now(),
+                timestamp_sold: 0,
+                pnl: 0,
+                status: OrderStatus.OPEN,
+            });
+        } else if (order !== undefined && side === Side.SELL) {
+            order.amount_sold += amount;
+            order.price_sold = price;
+            order.timestamp_sold = Date.now();
+            order.pnl = (order.amount_sold * order.price_sold) - (order.amount_bought * order.price_bought);
+            order.status = OrderStatus.CLOSED;
+            return order;
+        }
+
+
+        // if (side === Side.BUY) {
+        //     order.amount_bought += amount;
+        //     order.price_bought = price;
+        //     order.timestamp_bought = Date.now();
+        // } else {
+        //     order.amount_sold += amount;  
+        //     order.price_sold = price;
+        //     order.timestamp_sold = Date.now();
+        // }
+
+        // order.pnl = order.amount_bought * order.price_bought - order.amount_sold * order.price_sold;
+        
+        // // Update order status if needed
+        // if (order.amount_bought > 0 && order.amount_sold > 0) {
+        //     if (order.amount_bought === order.amount_sold) {
+        //         order.status = OrderStatus.FILLED;
+        //     }
+        // }
+
+        // this._addOrder(creator, order);
+        
+        return order;
+    }
+    
+    // Get all orders for a specific creator
+    getOrdersByCreator(creator: string): Order[] {
+        const creatorOrders = this.orders.get(creator);
+        if (!creatorOrders) return [];
+        return Array.from(creatorOrders.values());
+    }
+    
+    // Get all orders for a specific mint
+    getOrdersByMint(mint: string): Order[] {
+        const result: Order[] = [];
+        this.orders.forEach(creatorOrders => {
+            const order = creatorOrders.get(mint);
+            if (order) result.push(order);
+        });
+        return result;
+    }
+    
+    // Get a snapshot of the entire order book
+    getOrderBookSnapshot(): { [creator: string]: Order[] } {
+        const snapshot: { [creator: string]: Order[] } = {};
+        this.orders.forEach((creatorOrders, creator) => {
+            snapshot[creator] = Array.from(creatorOrders.values());
+        });
+        return snapshot;
+    }
+    
+    // Calculate total volume for a specific mint
+    calculateMintVolume(mint: string): { buyVolume: number, sellVolume: number } {
+        let buyVolume = 0;
+        let sellVolume = 0;
+        
+        this.orders.forEach(creatorOrders => {
+            const order = creatorOrders.get(mint);
+            if (order) {
+                buyVolume += order.amount_bought * order.price_bought;
+                sellVolume += order.amount_sold * order.price_sold;
+            }
+        });
+        
+        return { buyVolume, sellVolume };
+    }
+    
+    // Get market summary for a specific mint
+    getMarketSummary(mint: string) {
+        const orders = this.getOrdersByMint(mint);
+        const volume = this.calculateMintVolume(mint);
+        
+        let highestBid = 0;
+        let lowestAsk = Number.MAX_VALUE;
+        
+        orders.forEach(order => {
+            if (order.price_bought > highestBid) {
+                highestBid = order.price_bought;
+            }
+            if (order.price_sold < lowestAsk && order.price_sold > 0) {
+                lowestAsk = order.price_sold;
+            }
+        });
+        
+        return {
+            mint,
+            highestBid,
+            lowestAsk: lowestAsk === Number.MAX_VALUE ? 0 : lowestAsk,
+            spread: lowestAsk === Number.MAX_VALUE ? 0 : lowestAsk - highestBid,
+            buyVolume: volume.buyVolume,
+            sellVolume: volume.sellVolume
+        };
+    }
+} 

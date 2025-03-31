@@ -1,9 +1,26 @@
 import * as WebSocket from 'ws';
+import { OrderBook, Side } from './services/order.book';
 
 // Create a WebSocket server that listens on port 3012
 const wss = new WebSocket.Server({ port: 3012 });
 
+// Initialize the order book
+const orderBook = new OrderBook();
+
 console.log('WebSocket server started on port 3012');
+
+
+interface SwapOrder {
+  mint: string;
+  amount: string;
+  sol_amount: string;
+  bonding_curve: string;
+  associated_bonding_curve: string;
+  decimal: number;
+  is_buy: boolean;
+  origin: string;
+  timestamp: number;
+}
 
 // Handle new connections
 wss.on('connection', (ws: WebSocket) => {
@@ -11,13 +28,27 @@ wss.on('connection', (ws: WebSocket) => {
 
   // Handle messages from clients
   ws.on('message', (message: Buffer) => {
-    const data = message.toString('utf-8');
+    const data = JSON.parse(message.toString('utf-8')) as SwapOrder;
     console.log('Received message:', data);
     
-    // You can process the message here
+    // Process the trade in the order book
+    const side = data.is_buy ? Side.BUY : Side.SELL;
+    const price = parseFloat(data.sol_amount);
+    const amount = parseFloat(data.amount);
     
-    // Example: Echo the message back to the client
-    ws.send(`Server received: ${data}`);
+    // Process the trade
+    const order = orderBook.processTrade(
+      data.origin,
+      data.mint,
+      side,
+      price,
+      amount
+    );
+
+    if (order) {
+      console.log('Order processed:', order);
+    }
+    
   });
 
   // Handle client disconnection
@@ -29,7 +60,9 @@ wss.on('connection', (ws: WebSocket) => {
   ws.on('error', (error: Error) => {
     console.error('WebSocket error:', error);
   });
+  
 });
+
 
 // Handle server errors
 wss.on('error', (error: Error) => {
