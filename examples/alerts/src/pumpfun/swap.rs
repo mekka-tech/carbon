@@ -29,9 +29,9 @@ impl SwapPublisher {
   /// Asynchronously creates a new publisher instance and stores it globally.
   pub async fn init() -> CarbonResult<()> {
     let (mut socket, response) = connect("ws://localhost:3012").expect("Can't connect");
+    socket.send(Message::Text("Copy Bot Started".into())).unwrap();
     let publisher = SwapPublisher { socket };
     GLOBAL_SWAP_PUBLISHER.set(Box::new(publisher));
-    socket.send(Message::Text("Copy Bot Started".into())).unwrap();
     Ok(())
   }
 
