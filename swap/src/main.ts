@@ -21,9 +21,16 @@ interface SwapOrder {
   origin: string;
   timestamp: number;
 }
+enum Origin {
+  STOP_LOSS = 'stop_loss',
+  TAKE_PROFIT = 'take_profit',
+  NORMAL = 'normal'
+}
 
 
 const CREATORS = ['CkMbUezSZm6eteRBg5vJLDmxXL4YcSPT6zJtrBwjDWU4']
+
+const SOL_PRICE = 130
 
 // Handle new connections
 wss.on('connection', (ws: WebSocket) => {
@@ -32,11 +39,11 @@ wss.on('connection', (ws: WebSocket) => {
   // Handle messages from clients
   ws.on('message', (message: Buffer) => {
     const data = JSON.parse(message.toString('utf-8')) as SwapOrder;
-    console.log('Received message:', data);
+    console.log('Followed Wallet Action=>', data.is_buy ? 'BUY' : 'SELL', 'Token=>', data.mint, 'Amount=>', data.amount, 'Sol Amount=>', data.sol_amount);
     
     // Process the trade in the order book
     const side = data.is_buy ? Side.BUY : Side.SELL;
-    const price = parseFloat(data.sol_amount);
+    const price = parseFloat(data.sol_amount) / parseFloat(data.amount) * SOL_PRICE;
     const amount = parseFloat(data.amount);
     
     // Process the trade
@@ -45,11 +52,19 @@ wss.on('connection', (ws: WebSocket) => {
       data.mint,
       side,
       price,
-      amount
+      amount,
+      data.origin
     );
 
     if (order) {
-      console.log('Order processed:', order);
+      let text = 'Order =>'
+      if (side === Side.BUY) {
+        text = `BUY Token=> ${order.mint} Amount=> ${order.amount_bought} Price=> $${order.price_bought} USDC`
+      } else {
+        text = `SELL Token=> ${order.mint} Amount=> ${order.amount_sold} Price=> $${order.price_sold} USDC`
+        text += `\nPNL=> $${order.pnl} USDC`
+      }
+      console.log(text);
     }
     
   });

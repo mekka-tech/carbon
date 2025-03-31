@@ -19,6 +19,7 @@ export interface Order {
     timestamp_sold: number;
     pnl: number;
     status: OrderStatus;
+    origin: string;
 }
 
 export class OrderBook {
@@ -45,7 +46,7 @@ export class OrderBook {
     }
     
     // Process a trade
-    processTrade(creator: string, mint: string, side: Side, price: number, amount: number): Order | undefined {
+    processTrade(creator: string, mint: string, side: Side, price: number, amount: number, origin: string): Order | undefined {
         const order = this._getOrder(mint, creator);
         if (!order && side === Side.BUY) {
             return this._addOrder({
@@ -59,6 +60,7 @@ export class OrderBook {
                 timestamp_sold: 0,
                 pnl: 0,
                 status: OrderStatus.OPEN,
+                origin: origin
             });
         } else if (order !== undefined && side === Side.SELL) {
             order.amount_sold += amount;
@@ -66,6 +68,7 @@ export class OrderBook {
             order.timestamp_sold = Date.now();
             order.pnl = (order.amount_sold * order.price_sold) - (order.amount_bought * order.price_bought);
             order.status = OrderStatus.CLOSED;
+            order.origin = origin;
             return order;
         }
 

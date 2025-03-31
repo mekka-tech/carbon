@@ -107,7 +107,7 @@ impl Processor for PumpfunInstructionProcessor {
                             associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
                             decimal: 6,
                             is_buy: true,
-                            origin: "buy".to_string(),
+                            origin: "normal".to_string(),
                             timestamp: Utc::now().timestamp(),
                         }).unwrap();
                         socket.socket.send(Message::Text(body.into())).unwrap_or(());
@@ -128,7 +128,7 @@ impl Processor for PumpfunInstructionProcessor {
                             associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
                             decimal: 6,
                             is_buy: false,
-                            origin: "sell".to_string(),
+                            origin: "normal".to_string(),
                             timestamp: Utc::now().timestamp(),
                         }).unwrap();
                         socket.socket.send(Message::Text(body.into())).unwrap_or(());
@@ -168,8 +168,8 @@ impl Processor for PumpfunInstructionProcessor {
                             let mut socket = SOCKET.lock().unwrap();
                             let body = serde_json::to_string(&SwapOrder {
                                 mint: trade_event.mint.to_string(),
-                                amount: "".to_string(),
-                                sol_amount: "".to_string(),
+                                amount: token_amount.to_string(),
+                                sol_amount: sol_amount.to_string(),
                                 bonding_curve: "".to_string(),
                                 associated_bonding_curve: "".to_string(),
                                 decimal: 6,
