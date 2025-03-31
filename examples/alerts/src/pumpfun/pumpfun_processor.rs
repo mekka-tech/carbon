@@ -61,6 +61,7 @@ const PUMP_USERS: &[&str] = &[
     "EaVboaPxFCYanjoNWdkxTbPvt57nhXGu5i6m9m6ZS2kK",
     "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
     "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
+    "CkMbUezSZm6eteRBg5vJLDmxXL4YcSPT6zJtrBwjDWU4",
 ];
 
 // const PUMP_USERS: &[&str] = &[
@@ -93,25 +94,38 @@ impl Processor for PumpfunInstructionProcessor {
             PumpfunInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
                 Some(accounts) => {
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
-                    let mut socket = SOCKET.lock().unwrap();
-                    let body = serde_json::to_string(&SwapOrder {
-                        mint: accounts.mint.to_string(),
-                        amount: buy.amount.to_string(),
-                        price: buy.max_sol_cost.to_string(),
-                        bonding_curve: accounts.bonding_curve.to_string(),
-                        associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
-                        decimal: 6,
-                        is_buy: true,
-                    }).unwrap();
-                    socket.socket.send(Message::Text(body.into())).unwrap_or(());
+                    if PUMP_USERS.contains(&user_str.as_str()) {
+                        let mut socket = SOCKET.lock().unwrap();
+                        let body = serde_json::to_string(&SwapOrder {
+                            mint: accounts.mint.to_string(),
+                            amount: buy.amount.to_string(),
+                            maxSolCost: buy.max_sol_cost.to_string(),
+                            bondingCurve: accounts.bonding_curve.to_string(),
+                            associatedBondingCurve: accounts.associated_bonding_curve.to_string(),
+                            decimal: 6,
+                            isBuy: true,
+                        }).unwrap();
+                        socket.socket.send(Message::Text(body.into())).unwrap_or(());
+                    }
                 }
                 None => log::error!("Failed to arrange accounts for Buy {}", accounts.len()),
             },
             PumpfunInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
                 Some(accounts) => {
-                    log::info!(
-                        "Sell: sell: {sell:?}, accounts: {accounts:#?}"
-                    );
+                    let user_str = metadata.transaction_metadata.fee_payer.to_string();
+                    if PUMP_USERS.contains(&user_str.as_str()) {
+                        let mut socket = SOCKET.lock().unwrap();
+                        let body = serde_json::to_string(&SwapOrder {
+                            mint: accounts.mint.to_string(),
+                            amount: sell.amount.to_string(),
+                            maxSolCost: sell.max_sol_cost.to_string(),
+                            bondingCurve: accounts.bonding_curve.to_string(),
+                            associatedBondingCurve: accounts.associated_bonding_curve.to_string(),
+                            decimal: 6,
+                            isBuy: false,
+                        }).unwrap();
+                        socket.socket.send(Message::Text(body.into())).unwrap_or(());
+                    }
                 }
                 None => log::error!("Failed to arrange accounts for Sell {}", accounts.len()),
             },

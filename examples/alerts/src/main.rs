@@ -147,35 +147,6 @@ pub async fn main() -> CarbonResult<()> {
     //     },
     // );
 
-    let pump_users: &[String] = &[
-        "JDd3hy3gQn2V982mi1zqhNqUw1GfV2UL6g76STojCJPN".to_string(),
-        "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj".to_string(),
-        "AJ6MGExeK7FXmeKkKPmALjcdXVStXYokYNv9uVfDRtvo".to_string(),
-        "CyaE1VxvBrahnPWkqm5VsdCvyS2QmNht2UFrKJHga54o".to_string(),
-        "DNfuF1L62WWyW3pNakVkyGGFzVVhj4Yr52jSmdTyeBHm".to_string(),
-        "BCnqsPEtA1TkgednYEebRpkmwFRJDCjMQcKZMMtEdArc".to_string(),
-        "73LnJ7G9ffBDjEBGgJDdgvLUhD5APLonKrNiHsKDCw5B".to_string(),
-        "5rkPDK4JnVAumgzeV2Zu8vjggMTtHdDtrsd5o9dhGZHD".to_string(),
-        "6m5sW6EAPAHncxnzapi1ZVJNRb9RZHQ3Bj7FD84X9rAF".to_string(),
-        "4BdKaxN8G6ka4GYtQQWk4G4dZRUTX2vQH9GcXdBREFUk".to_string(),
-        "BCagckXeMChUKrHEd6fKFA1uiWDtcmCXMsqaheLiUPJd".to_string(),
-        "3pZ59YENxDAcjaKa3sahZJBcgER4rGYi4v6BpPurmsGj".to_string(),
-        "EHg5YkU2SZBTvuT87rUsvxArGp3HLeye1fXaSDfuMyaf".to_string(),
-        "8rvAsDKeAcEjEkiZMug9k8v1y8mW6gQQiMobd89Uy7qR".to_string(),
-        "7iabBMwmSvS4CFPcjW2XYZY53bUCHzXjCFEFhxeYP4CY".to_string(),
-        "As7HjL7dzzvbRbaD3WCun47robib2kmAKRXMvjHkSMB5".to_string(),
-        "96sErVjEN7LNJ6Uvj63bdRWZxNuBngj56fnT9biHLKBf".to_string(),
-        "F72vY99ihQsYwqEDCfz7igKXA5me6vN2zqVsVUTpw6qL".to_string(),
-        "215nhcAHjQQGgwpQSJQ7zR26etbjjtVdW74NLzwEgQjP".to_string(),
-        "GJA1HEbxGnqBhBifH9uQauzXSB53to5rhDrzmKxhSU65".to_string(),
-        "G3g1CKqKWSVEVURZDNMazDBv7YAhMNTjhJBVRTiKZygk".to_string(),
-        "BXNiM7pqt9Ld3b2Hc8iT3mA5bSwoe9CRrtkSUs15SLWN".to_string(),
-        "7ABz8qEFZTHPkovMDsmQkm64DZWN5wRtU7LEtD2ShkQ6".to_string(),
-        "EaVboaPxFCYanjoNWdkxTbPvt57nhXGu5i6m9m6ZS2kK".to_string(),
-        "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV".to_string(),
-        "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj".to_string(),
-    ];
-
     transaction_filters.insert(
         "pumpfun_transaction_filter".to_string(),
         SubscribeRequestFilterTransactions {
@@ -183,7 +154,7 @@ pub async fn main() -> CarbonResult<()> {
             failed: Some(false),
             account_include: vec![PUMPFUN_PROGRAM_ID.to_string().clone()],
             account_exclude: vec![],
-            account_required: pump_users.to_vec(),
+            account_required: vec![],
             signature: None,
         },
     );
