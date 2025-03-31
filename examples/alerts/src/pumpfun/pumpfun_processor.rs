@@ -161,9 +161,9 @@ impl Processor for PumpfunInstructionProcessor {
                             // For example, if position has a `quantity` field:
                             let total_pnl = diff * position.quantity;
 
-                            if (pct_diff <= 10) {
+                            if (pct_diff <= 10.0) {
                                 println!("STOP LOSS, Possible PNL: ${:.6}", total_pnl);
-                            } else if (pct_diff >= 30) {
+                            } else if (pct_diff >= 30.0) {
                                 println!("TAKE PROFIT, Possible PNL: ${:.6}", total_pnl);
                             }
 
