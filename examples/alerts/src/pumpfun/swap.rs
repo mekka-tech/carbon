@@ -31,12 +31,12 @@ impl SwapPublisher {
     let (mut socket, response) = connect("ws://localhost:3012").expect("Can't connect");
     socket.send(Message::Text("Copy Bot Started".into())).unwrap();
     let publisher = SwapPublisher { socket };
-    GLOBAL_SWAP_PUBLISHER.set(&mut Box::new(publisher));
+    GLOBAL_SWAP_PUBLISHER.set(Box::new(publisher));
     Ok(())
   }
 
   async fn _publish_swap_order(
-    &mut self,
+    self,
     swap_order: &SwapOrder,
   ) -> CarbonResult<()> {
     let message = serde_json::to_string(&swap_order).unwrap_or("{}".to_string());
@@ -49,7 +49,7 @@ impl SwapPublisher {
   pub async fn publish_swap_order(
     swap_order: &SwapOrder,
   ) -> CarbonResult<()> {
-    if let Some(publisher) = GLOBAL_SWAP_PUBLISHER.get() {
+    if let Some(publisher) = GLOBAL_SWAP_PUBLISHER.get_mut() {
         publisher._publish_swap_order(swap_order).await
     } else {
         Err(Error::Custom("Global publisher not initialized".to_string()))
