@@ -70,7 +70,7 @@ export class OrderBook {
                 status: OrderStatus.OPEN,
                 origin: origin
             });
-        } else if (order !== undefined && side === Side.SELL) {
+        } else if (order !== undefined && order.status === OrderStatus.OPEN && side === Side.SELL) {
             const priceDiff = price - order.price_bought;
             const pnl_percentage = (priceDiff / order.price_bought) * 100;
             const pnl = priceDiff * order.amount_bought
