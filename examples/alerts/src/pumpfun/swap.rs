@@ -34,7 +34,7 @@ impl SwapPublisher {
     Ok(())
   }
 
-  pub async fn _publish_swap_order(
+  async fn _publish_swap_order(
     &self,
     swap_order: &SwapOrder,
   ) -> CarbonResult<()> {
