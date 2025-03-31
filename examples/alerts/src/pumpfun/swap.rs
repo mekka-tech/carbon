@@ -8,7 +8,7 @@ use serde::{Serialize, Deserialize};
 use carbon_core::error::{Error, CarbonResult};
 
 // Global OnceCell to hold the initialized publisher, wrapped in a Box.
-static GLOBAL_SWAP_PUBLISHER: OnceCell<&mut Box<SwapPublisher>> = OnceCell::new();
+static GLOBAL_SWAP_PUBLISHER: OnceCell<Box<SwapPublisher>> = OnceCell::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapOrder {
