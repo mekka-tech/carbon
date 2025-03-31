@@ -5,6 +5,7 @@ use std::fmt;
 // Global OnceCell to hold the initialized publisher, wrapped in a Box.
 static GLOBAL_SWAP_PUBLISHER: OnceCell<Box<SwapPublisher>> = OnceCell::new();
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapOrder {
   pub mint: String,
   pub amount: String,
