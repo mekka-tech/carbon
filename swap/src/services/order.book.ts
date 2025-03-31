@@ -53,6 +53,7 @@ export class OrderBook {
             }
             console.log(text);
             console.log(`https://solscan.io/tx/${signature}`)
+            console.log(`---------------------------------------------`)
             return this._addOrder({
                 mint,
                 amount_bought: amount,
@@ -76,8 +77,9 @@ export class OrderBook {
                 order.pnl = pnl;
                 order.status = OrderStatus.CLOSED;
                 order.origin = origin;
-                console.log(`==================================\nPOSITION CLOSED\n[${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%)\n==================================`)
+                console.log(`==================================\nPOSITION CLOSED => ${origin.toUpperCase()}\n[${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%)\n==================================`)
                 console.log(`https://solscan.io/tx/${signature}`)
+                console.log(`---------------------------------------------`)
             } else if (origin === 'stop_loss' || origin === 'take_profit') {
                 order.amount_sold += order.amount_bought;
                 order.price_sold = price;
@@ -85,8 +87,9 @@ export class OrderBook {
                 order.pnl = pnl;
                 order.status = OrderStatus.CLOSED;
                 order.origin = origin;
-                console.log(`==================================\nPOSITION CLOSED\n[${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%)\n==================================`)
+                console.log(`==================================\nPOSITION CLOSED => ${origin.toUpperCase()}\n[${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%)\n==================================`)
                 console.log(`https://solscan.io/tx/${signature}`)
+                console.log(`---------------------------------------------`)
             } else {
                 return undefined;
             }
