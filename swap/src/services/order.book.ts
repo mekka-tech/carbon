@@ -50,6 +50,10 @@ export class OrderBook {
     getOrderStatus(mint: string): OrderStatus | undefined {
         return this._getOrder(mint)?.status;
     }
+
+    getExpiredOrders(): Order[] {
+        return Array.from(this.orders.values()).filter(order => order.status === OrderStatus.OPEN && Date.now() - order.timestamp_bought > 20_000);
+    }
     
     // Process a trade
     processTrade(mint: string, side: Side, price: number, amount: number, origin: string, signature: string, bondingCurve: string, associatedBondingCurve: string): Order | undefined {

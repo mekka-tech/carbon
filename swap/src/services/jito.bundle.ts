@@ -18,7 +18,7 @@ export const endpoints = {
 const regions = ['ams', 'ger', 'ny', 'tokyo', 'default'] as Region[] // "default",
 let idx = 0
 
-export const JitoTipAmount = 7_500_00
+export const JitoTipAmount = 0.001
 
 export const tipAccounts = [
     '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
@@ -31,8 +31,19 @@ export const tipAccounts = [
     '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT',
 ]
 
+interface JitoFeeResponse {
+    time: string;
+    landed_tips_25th_percentile: number;
+    landed_tips_50th_percentile: number;
+    landed_tips_75th_percentile: number;
+    landed_tips_95th_percentile: number;
+    landed_tips_99th_percentile: number;
+    ema_landed_tips_50th_percentile: number;
+}
+
 export class JitoBundleService {
     endpoint: string
+    static currentJitoFee: number = JitoTipAmount;
 
     // constructor(_region: Region) {
     constructor() {
@@ -125,5 +136,32 @@ export class JitoBundleService {
         }
         if (retries === 0) return true
         return false
+    }
+
+    static async updateJitoFee() {
+        try {
+            const response = await axios.get('https://bundles.jito.wtf/api/v1/bundles/tip_floor');
+            const feeData: JitoFeeResponse[] = response.data;
+            
+            if (feeData && feeData.length > 0) {
+                // Using the EMA of 50th percentile as a reasonable fee
+                const emaFee = feeData[0].landed_tips_95th_percentile;
+                
+                // Convert from SOL to lamports (1 SOL = 10^9 lamports)
+                this.currentJitoFee = +emaFee * 1.2
+                
+                console.log(`Updated Jito fee: ${this.currentJitoFee} lamports (${emaFee} SOL)`);
+                return this.currentJitoFee;
+            }
+            
+            return this.currentJitoFee;
+        } catch (error) {
+            console.error('Failed to update Jito fee:', error);
+            return this.currentJitoFee;
+        }
+    }
+    
+    static getCurrentJitoFee(): number {
+        return this.currentJitoFee;
     }
 }

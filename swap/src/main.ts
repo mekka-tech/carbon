@@ -1,11 +1,12 @@
 import 'dotenv/config';
 import * as WebSocket from 'ws';
-import { OrderBook, Side, OrderStatus } from './services/order.book';
+import { OrderBook, Side, OrderStatus, Order } from './services/order.book';
 import { DiscordWebhookService } from './services/discord.webhook';
 import { nonBlockingWrapper } from './utils/nonBlockingWrapper';
 import { pumpFunSwap } from './pump/swap';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { getKeyPairFromPrivateKey } from './pump/utils';
+import { JitoBundleService } from './services/jito.bundle';
 // Create a WebSocket server that listens on port 3012
 const wss = new WebSocket.Server({ port: 3012 });
 
@@ -21,6 +22,12 @@ setInterval(() => {
   }
 }, 60_000);
 
+setInterval(() => {
+  JitoBundleService.updateJitoFee()
+}, 30_000);
+JitoBundleService.updateJitoFee().catch((error: any) => {
+  console.error('Failed to update Jito fee:', error);
+})
 
 console.log('WebSocket server started on port 3012');
 
@@ -54,7 +61,46 @@ const BUY_AMOUNT = 0.1
 const SOL_PRICE = 130
 const GAS_FEE = 0.005
 const SLIPPAGE = 50
-const MEV_FEE = 0.01
+
+const EXPIRED_ORDERS: Order[] = []
+setInterval(() => {
+  const expiredOrders = orderBook.getExpiredOrders()
+  if (expiredOrders.length > 0) {
+    expiredOrders.forEach((order) => {
+      if (!EXPIRED_ORDERS.includes(order))  {
+        EXPIRED_ORDERS.push(order)
+      }
+    })
+  }
+
+  EXPIRED_ORDERS.forEach(async(order) => {
+    orderBook.processTrade(
+      order.mint,
+      Side.SELL,
+      order.price_bought,
+      order.amount_bought,
+      order.origin,
+      'InternalInternalInternal',
+      order.bonding_curve,
+      order.associated_bonding_curve
+    )
+    await pumpFunSwap(
+      payer,
+      order.mint,
+      order.price_bought,
+      order.bonding_curve,
+      order.associated_bonding_curve,
+      6,
+      false,
+      order.amount_bought,
+      GAS_FEE,
+      SLIPPAGE,
+      JitoBundleService.getCurrentJitoFee(),
+      orderBook
+    )
+  })
+}, 10_000);
+
 // Handle new connections
 wss.on('connection', (ws: WebSocket) => {
   console.log('Client connected');
@@ -92,7 +138,7 @@ wss.on('connection', (ws: WebSocket) => {
           order.amount_bought,
           GAS_FEE,
           SLIPPAGE,
-          MEV_FEE,
+          JitoBundleService.getCurrentJitoFee(),
           orderBook
         )
       }
@@ -119,7 +165,7 @@ wss.on('connection', (ws: WebSocket) => {
           BUY_AMOUNT,
           GAS_FEE,
           SLIPPAGE,
-          MEV_FEE,
+          JitoBundleService.getCurrentJitoFee(),
           orderBook
         )
       } else if (order && order.status === OrderStatus.CLOSED && previousOrderStatus !== order.status && data.is_buy === false) {
@@ -134,7 +180,7 @@ wss.on('connection', (ws: WebSocket) => {
           order.amount_bought,
           GAS_FEE,
           SLIPPAGE,
-          MEV_FEE,
+          JitoBundleService.getCurrentJitoFee(),
           orderBook
         )
       }
