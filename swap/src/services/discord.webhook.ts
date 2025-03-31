@@ -48,12 +48,12 @@ export class DiscordWebhookService {
       
       // Create fields for each order
       const fields: EmbedField[] = orders.map(order => {
-        const pnlFormatted = (order.pnl || 0).toFixed(4);
+        const pnlFormatted = (order.pnl || 0).toFixed(2);
         const pnlSign = order.pnl >= 0 ? '+' : '';
         
         return {
           name: `Order #${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}`,
-          value: `**Entry:** ${order.price_bought}\n**Exit:** ${order.price_sold}\n**PNL:** ${pnlSign}${pnlFormatted}`,
+          value: `**Entry:** ${order.price_bought.toFixed(7)}\n**Exit:** ${order.price_sold.toFixed(7)}\n**PNL:** ${pnlSign}${pnlFormatted}`,
           inline: true
         };
       });
