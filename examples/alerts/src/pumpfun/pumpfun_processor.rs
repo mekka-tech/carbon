@@ -11,9 +11,7 @@ use {
         metrics::MetricsCollection,
         processor::Processor,
     },
-    carbon_pumpfun_decoder::instructions::PumpfunInstruction,
-    carbon_pumpfun_decoder::instructions::buy::Buy,
-    carbon_pumpfun_decoder::instructions::sell::Sell,
+    carbon_pumpfun_decoder::instructions::{PumpfunInstruction, buy::Buy, sell::Sell},
     core::time,
     serde_json::Result,
     std::collections::HashMap,
@@ -91,22 +89,22 @@ impl Processor for PumpfunInstructionProcessor {
         let accounts = instruction.accounts;
         
         match instruction.data {
-            // PumpfunInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
-            //     Some(accounts) => {
-            //         log::info!(
-            //             "Buy: signature: {signature}, buy: {buy:?}, accounts: {accounts:#?}"
-            //         );
-            //     }
-            //     None => log::error!("Failed to arrange accounts for Buy {}", accounts.len()),
-            // },
-            // PumpfunInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
-            //     Some(accounts) => {
-            //         log::info!(
-            //             "Sell: signature: {signature}, sell: {sell:?}, accounts: {accounts:#?}"
-            //         );
-            //     }
-            //     None => log::error!("Failed to arrange accounts for Sell {}", accounts.len()),
-            // },
+            MoonshotInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
+                Some(accounts) => {
+                    log::info!(
+                        "Buy: signature: {signature}, buy: {buy:?}, accounts: {accounts:#?}"
+                    );
+                }
+                None => log::error!("Failed to arrange accounts for Buy {}", accounts.len()),
+            },
+            MoonshotInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
+                Some(accounts) => {
+                    log::info!(
+                        "Sell: signature: {signature}, sell: {sell:?}, accounts: {accounts:#?}"
+                    );
+                }
+                None => log::error!("Failed to arrange accounts for Sell {}", accounts.len()),
+            },
             PumpfunInstruction::TradeEvent(trade_event) => {
                 let user_str = trade_event.user.to_string();
                 // Normalize the raw amounts.
