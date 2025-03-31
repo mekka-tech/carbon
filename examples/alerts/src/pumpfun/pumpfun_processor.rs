@@ -90,22 +90,22 @@ impl Processor for PumpfunInstructionProcessor {
         let accounts = instruction.accounts;
         
         match instruction.data {
-            PumpfunInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
-                Some(accounts) => {
-                    log::info!(
-                        "Buy: signature: {signature}, buy: {buy:?}, accounts: {accounts:#?}"
-                    );
-                }
-                None => log::error!("Failed to arrange accounts for Buy {}", accounts.len()),
-            },
-            PumpfunInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
-                Some(accounts) => {
-                    log::info!(
-                        "Sell: signature: {signature}, sell: {sell:?}, accounts: {accounts:#?}"
-                    );
-                }
-                None => log::error!("Failed to arrange accounts for Sell {}", accounts.len()),
-            },
+            // PumpfunInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
+            //     Some(accounts) => {
+            //         log::info!(
+            //             "Buy: signature: {signature}, buy: {buy:?}, accounts: {accounts:#?}"
+            //         );
+            //     }
+            //     None => log::error!("Failed to arrange accounts for Buy {}", accounts.len()),
+            // },
+            // PumpfunInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
+            //     Some(accounts) => {
+            //         log::info!(
+            //             "Sell: signature: {signature}, sell: {sell:?}, accounts: {accounts:#?}"
+            //         );
+            //     }
+            //     None => log::error!("Failed to arrange accounts for Sell {}", accounts.len()),
+            // },
             PumpfunInstruction::TradeEvent(trade_event) => {
                 let user_str = trade_event.user.to_string();
                 // Normalize the raw amounts.
