@@ -61,10 +61,11 @@ const PUMP_USERS: &[&str] = &[
     "EaVboaPxFCYanjoNWdkxTbPvt57nhXGu5i6m9m6ZS2kK",
     "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
     "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
+    "744ZryTiFQ1LDySKUikc93M7MT7ZdB3DnFGsrT1gYhNW",
 ];
 
 const OUR_WALLETS: &[&str] = &[
-    "CkMbUezSZm6eteRBg5vJLDmxXL4YcSPT6zJtrBwjDWU4",
+    "744ZryTiFQ1LDySKUikc93M7MT7ZdB3DnFGsrT1gYhNW",
 ];
 
 // const PUMP_USERS: &[&str] = &[
@@ -160,7 +161,7 @@ impl Processor for PumpfunInstructionProcessor {
 
                 let mut order_book = ORDER_BOOK.lock().unwrap();
 
-                match order_book.get_position("CkMbUezSZm6eteRBg5vJLDmxXL4YcSPT6zJtrBwjDWU4".to_string().as_str(),trade_event.mint.to_string().as_str()) {
+                match order_book.get_position(OUR_WALLETS[0].as_str(),trade_event.mint.to_string().as_str()) {
                     Some(position) => {
                         // Make sure that position.current_price is not zero to avoid division by zero.
                     if position.current_price != 0.0 {
