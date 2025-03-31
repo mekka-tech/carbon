@@ -1,6 +1,9 @@
 use once_cell::sync::OnceCell;
-use tungstenite::{WebSocket, stream::MaybeTlsStream, Message, stream::MaybeTlsStream};
-use std::{fmt, io::Read, io::Write};
+use tungstenite::{connect, WebSocket, stream::MaybeTlsStream, stream::NoDelay::TcpStream, Message};
+use std::{
+  fmt,
+  net::TcpStream
+};
 use serde::{Serialize, Deserialize};
 use carbon_core::error::{Error, CarbonResult};
 
@@ -19,7 +22,7 @@ pub struct SwapOrder {
 }
 
 pub struct SwapPublisher {
-  socket: WebSocket<MaybeTlsStream<MaybeTlsStream::Plain>>,
+  socket: WebSocket<MaybeTlsStream<TcpStream>>,
 }
 
 impl SwapPublisher {
