@@ -173,7 +173,7 @@ impl Processor for PumpfunInstructionProcessor {
                         
                         if (pct_diff <= 10.0 || pct_diff >= 30.0) {
                             let origin = if pct_diff <= 10.0 { "stop_loss".to_string() } else { "take_profit".to_string() };
-                            println!("Possible PNL: ${:.6} ({:.2}%)", origin, total_pnl, pct_diff);
+                            println!("Possible PNL: ${:.6} ({:.2}%)", total_pnl, pct_diff);
                             let mut socket = SOCKET.lock().unwrap();
                             let body = serde_json::to_string(&SwapOrder {
                                 creator: user_str.to_string(),
