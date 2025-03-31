@@ -36,8 +36,8 @@ impl SwapPublisher {
   }
 
   async fn _publish_swap_order(
-    &mut self,
-    swap_order: &SwapOrder,
+    &self,
+    swap_order: SwapOrder,
   ) -> CarbonResult<()> {
     let message = serde_json::to_string(&swap_order).unwrap_or("{}".to_string());
     self.socket.send(Message::Text(message.into()));
@@ -47,7 +47,7 @@ impl SwapPublisher {
   /// Static async method to publish a SwapResult via the global instance.
   /// This allows you to call:
   pub async fn publish_swap_order(
-    swap_order: &SwapOrder,
+    swap_order: SwapOrder,
   ) -> CarbonResult<()> {
     if let Some(publisher) = GLOBAL_SWAP_PUBLISHER.get() {
         publisher._publish_swap_order(swap_order).await
