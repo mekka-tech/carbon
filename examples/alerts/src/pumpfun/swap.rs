@@ -6,6 +6,7 @@ use std::{
 };
 use serde::{Serialize, Deserialize};
 use carbon_core::error::{Error, CarbonResult};
+use std::sync::{Mutex, Arc};
 
 // Global OnceCell to hold the initialized publisher, wrapped in a Box.
 static GLOBAL_SWAP_PUBLISHER: OnceCell<Box<SwapPublisher>> = OnceCell::new();
@@ -22,15 +23,17 @@ pub struct SwapOrder {
 }
 
 pub struct SwapPublisher {
-  socket: WebSocket<MaybeTlsStream<TcpStream>>,
+  socket: Arc<Mutex<WebSocket<MaybeTlsStream<TcpStream>>>>,
 }
 
 impl SwapPublisher {
   /// Asynchronously creates a new publisher instance and stores it globally.
   pub async fn init() -> CarbonResult<()> {
-    let (socket, response) = connect("ws://localhost:3012").expect("Can't connect");
+    let (mut socket, response) = connect("ws://localhost:3012").expect("Can't connect");
     socket.send(Message::Text("Copy Bot Started".into())).unwrap();
-    let publisher = SwapPublisher { socket };
+    let publisher = SwapPublisher {
+      socket: Arc::new(Mutex::new(socket)),
+    };
     GLOBAL_SWAP_PUBLISHER.set(Box::new(publisher));
     Ok(())
   }
@@ -39,8 +42,8 @@ impl SwapPublisher {
     &self,
     swap_order: SwapOrder,
   ) -> CarbonResult<()> {
-    let message = serde_json::to_string(&swap_order).unwrap_or("{}".to_string());
-    self.socket.send(Message::Text(message.into()));
+    let message: String = serde_json::to_string(&swap_order).unwrap_or("{}".to_string());
+    self.socket.lock().unwrap().send(Message::Text(message.into())).unwrap();
     Ok(())
   }
 
