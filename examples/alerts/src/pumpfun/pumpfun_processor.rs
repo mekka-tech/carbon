@@ -98,11 +98,13 @@ impl Processor for PumpfunInstructionProcessor {
                 Some(accounts) => {
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
                     if PUMP_USERS.contains(&user_str.as_str()) {
+                        let sol_amount: f64 = buy.max_sol_cost as f64 / 1e9;
+                        let token_amount: f64 = buy.amount as f64 / 1e6;
                         let mut socket = SOCKET.lock().unwrap();
                         let body = serde_json::to_string(&SwapOrder {
                             mint: accounts.mint.to_string(),
-                            amount: buy.amount.to_string(),
-                            sol_amount: buy.max_sol_cost.to_string(),
+                            amount: token_amount.to_string(),
+                            sol_amount: sol_amount.to_string(),
                             bonding_curve: accounts.bonding_curve.to_string(),
                             associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
                             decimal: 6,
@@ -119,11 +121,13 @@ impl Processor for PumpfunInstructionProcessor {
                 Some(accounts) => {
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
                     if PUMP_USERS.contains(&user_str.as_str()) {
+                        let sol_amount: f64 = sell.min_sol_output as f64 / 1e9;
+                        let token_amount: f64 = sell.amount as f64 / 1e6;
                         let mut socket = SOCKET.lock().unwrap();
                         let body = serde_json::to_string(&SwapOrder {
                             mint: accounts.mint.to_string(),
-                            amount: sell.amount.to_string(),
-                            sol_amount: sell.min_sol_output.to_string(),
+                            amount: token_amount.to_string(),
+                            sol_amount: sol_amount.to_string(),
                             bonding_curve: accounts.bonding_curve.to_string(),
                             associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
                             decimal: 6,
