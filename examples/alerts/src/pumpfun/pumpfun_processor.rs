@@ -173,7 +173,7 @@ impl Processor for PumpfunInstructionProcessor {
                         
                         if (pct_diff <= 10.0 || pct_diff >= 30.0) {
                             let origin = if pct_diff <= 10.0 { "stop_loss".to_string() } else { "take_profit".to_string() };
-                            println!("{} Possible PNL: ${:.6}", origin, total_pnl);
+                            println!("Possible PNL: ${:.6} ({:.2}%)", origin, total_pnl, pct_diff);
                             let mut socket = SOCKET.lock().unwrap();
                             let body = serde_json::to_string(&SwapOrder {
                                 creator: user_str.to_string(),
@@ -193,16 +193,16 @@ impl Processor for PumpfunInstructionProcessor {
 
 
                         println!("Trade occurred: {}", time_ago(trade_event.timestamp));
-                        println!(
-                            "[{}] Position Tracking - [{}] \nBought Price: ${:.6}, Current Price: ${:.6}, Diff: ${:.6} ({:.6}%), Possible PNL: ${:.6}",
-                            metadata.transaction_metadata.slot,
-                            position.user,
-                            position.current_price,
-                            token_price_usd,
-                            diff,
-                            pct_diff,
-                            total_pnl
-                        );
+                        // println!(
+                        //     "[{}] Position Tracking - [{}] \nBought Price: ${:.6}, Current Price: ${:.6}, Diff: ${:.6} ({:.6}%), Possible PNL: ${:.6}",
+                        //     metadata.transaction_metadata.slot,
+                        //     position.user,
+                        //     position.current_price,
+                        //     token_price_usd,
+                        //     diff,
+                        //     pct_diff,
+                        //     total_pnl
+                        // );
                     } else {
                         println!("Position Tracking: Bought Price is zero, cannot compute difference.");
                     }
