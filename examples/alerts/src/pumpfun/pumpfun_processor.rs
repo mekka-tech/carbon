@@ -68,15 +68,8 @@ const PUMP_USERS: &[&str] = &[
 
 // const ORDER_BOOK: HashMap<String, f64> = HashMap::new();
 
-pub struct PumpfunInstructionProcessor {
-    pub socket: WebSocket<MaybeTlsStream<Any>>,
-}
+pub struct PumpfunInstructionProcessor;
 
-impl PumpfunInstructionProcessor {
-    pub fn attach_socket(&mut self, socket: WebSocket<MaybeTlsStream<Any>>) {
-        PumpfunInstructionProcessor::socket = socket;
-    }
-}
 
 #[async_trait]
 impl Processor for PumpfunInstructionProcessor {
