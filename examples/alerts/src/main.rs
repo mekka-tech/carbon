@@ -170,7 +170,7 @@ pub async fn main() -> CarbonResult<()> {
     //         signature: None,
     //     },
     // );
-    SwapPublisher::init();
+    SwapPublisher::init().await?;
 
     
 
