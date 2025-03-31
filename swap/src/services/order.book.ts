@@ -1,4 +1,5 @@
 export enum OrderStatus {
+    PENDING = 'pending',
     OPEN = 'open',
     CLOSED = 'closed'
 }
@@ -40,11 +41,28 @@ export class OrderBook {
         }
         return order;
     }
+    _updateOrder(order: Order): Order {
+        this.orders.set(order.mint, order);
+        return order;
+    }
     
     // Process a trade
     processTrade(mint: string, side: Side, price: number, amount: number, origin: string, signature: string): Order | undefined {
         const order = this._getOrder(mint);
-        if (!order && side === Side.BUY) {
+        if (!order) {
+            return this._addOrder({
+                mint,
+                amount_bought: amount,
+                amount_sold: 0,
+                price_bought: price,
+                price_sold: 0,
+                timestamp_bought: Date.now(),
+                timestamp_sold: 0,
+                pnl: 0,
+                status: OrderStatus.PENDING,
+                origin: origin
+            });
+        } else if (order.status === OrderStatus.PENDING && side === Side.BUY) {
             let text = 'Order =>'
             if (side === Side.BUY) {
               text = `[${mint}] BUY => ${amount} => $${price} USD => ${price * amount} TOTAL`
@@ -53,7 +71,7 @@ export class OrderBook {
             }
             console.log(text);
             console.log(`https://solscan.io/tx/${signature}`)
-            return this._addOrder({
+            return this._updateOrder({
                 mint,
                 amount_bought: amount,
                 amount_sold: 0,
@@ -65,7 +83,7 @@ export class OrderBook {
                 status: OrderStatus.OPEN,
                 origin: origin
             });
-        } else if (order !== undefined && order.status === OrderStatus.OPEN && side === Side.SELL) {
+        } else if (order.status === OrderStatus.OPEN && side === Side.SELL) {
             const priceDiff = price - order.price_bought;
             const pnl_percentage = (priceDiff / order.price_bought) * 100;
             const pnl = priceDiff * order.amount_bought

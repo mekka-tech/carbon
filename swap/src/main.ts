@@ -2,7 +2,9 @@ import * as WebSocket from 'ws';
 import { OrderBook, OrderStatus, Side } from './services/order.book';
 import axios from 'axios';
 import { DiscordWebhookService } from './services/discord.webhook';
-
+import { nonBlockingWrapper } from './utils/nonBlockingWrapper';
+import { pumpFunSwap } from './pump/swap';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 // Create a WebSocket server that listens on port 3012
 const wss = new WebSocket.Server({ port: 3012 });
 
@@ -45,8 +47,11 @@ enum Origin {
 
 const CREATORS = ['CkMbUezSZm6eteRBg5vJLDmxXL4YcSPT6zJtrBwjDWU4']
 
+const BUY_AMOUNT = 0.1
 const SOL_PRICE = 130
-
+const GAS_FEE = 0.01
+const SLIPPAGE = 50
+const MEV_FEE = 0.025
 // Handle new connections
 wss.on('connection', (ws: WebSocket) => {
   console.log('Client connected');
@@ -56,18 +61,46 @@ wss.on('connection', (ws: WebSocket) => {
     const data = JSON.parse(message.toString('utf-8')) as SwapOrder;
     // Process the trade in the order book
     const side = data.is_buy ? Side.BUY : Side.SELL;
+    const tokenPriceOnSol = parseFloat(data.sol_amount) / parseFloat(data.amount)
     const price = parseFloat(data.sol_amount) / parseFloat(data.amount) * SOL_PRICE;
     const amount = parseFloat(data.amount);
     
-    // Process the trade
-    orderBook.processTrade(
-      data.mint,
-      side,
-      price,
-      amount,
-      data.origin,
-      data.signature
-    );
+    if (CREATORS.includes(data.creator)) {
+      // Process the trade
+      orderBook.processTrade(
+        data.mint,
+        side,
+        price,
+        amount,
+        data.origin,
+        data.signature
+      );  
+    } else {
+      nonBlockingWrapper(async () => {
+        await pumpFunSwap(
+          '',
+          data.mint,
+          tokenPriceOnSol * LAMPORTS_PER_SOL,
+          data.bonding_curve,
+          data.associated_bonding_curve,
+          data.decimal,
+          data.is_buy,
+          BUY_AMOUNT,
+          GAS_FEE,
+          SLIPPAGE,
+          MEV_FEE
+        )
+      })
+      // TODO: SWAP!
+      orderBook.processTrade(
+        data.mint,
+        side,
+        price,
+        amount,
+        data.origin,
+        data.signature
+      );  
+    }
     
   });
 
