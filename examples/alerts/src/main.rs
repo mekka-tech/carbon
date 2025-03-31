@@ -170,8 +170,7 @@ pub async fn main() -> CarbonResult<()> {
     //         signature: None,
     //     },
     // );
-    let (mut socket, response) = connect("ws://localhost:3012").expect("Can't connect");
-    SwapPublisher::init(socket).await?;
+    SwapPublisher::init().await?;
     
 
     let yellowstone_grpc = YellowstoneGrpcGeyserClient::new(
