@@ -161,7 +161,7 @@ impl Processor for PumpfunInstructionProcessor {
                         associated_bonding_curve: "".to_string(),
                         decimal: 6,
                         is_buy: trade_event.is_buy,
-                    });
+                    }).await?;
                     if trade_event.is_buy {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
                     } else {
