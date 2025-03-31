@@ -172,7 +172,8 @@ impl Processor for PumpfunInstructionProcessor {
 
                         
                         if (pct_diff <= 10.0 || pct_diff >= 30.0) {
-                            println!("STOP LOSS, Possible PNL: ${:.6}", total_pnl);
+                            let origin = if pct_diff <= 10.0 { "stop_loss".to_string() } else { "take_profit".to_string() }
+                            println!("{} Possible PNL: ${:.6}", origin, total_pnl);
                             let mut socket = SOCKET.lock().unwrap();
                             let body = serde_json::to_string(&SwapOrder {
                                 creator: user_str.to_string(),
@@ -183,7 +184,7 @@ impl Processor for PumpfunInstructionProcessor {
                                 associated_bonding_curve: "".to_string(),
                                 decimal: 6,
                                 is_buy: false,
-                                origin: if pct_diff <= 10.0 { "stop_loss".to_string() } else { "take_profit".to_string() },
+                                origin: origin,
                                 timestamp: Utc::now().timestamp(),
                                 signature: signature.to_string(),
                             }).unwrap();
