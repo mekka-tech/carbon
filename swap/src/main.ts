@@ -64,6 +64,7 @@ wss.on('connection', (ws: WebSocket) => {
         text = `[${data.creator}] [${order.mint}] SELL => ${order.amount_sold} => $${order.price_sold} USD => ${data.sol_amount} SOL`;
       }
       console.log(text);
+      console.log(`https://solscan.io/tx/${data.signature}`)
     }
     
   });
