@@ -21,7 +21,7 @@ use {
     chrono::{DateTime, Utc, TimeZone},
 };
 use tungstenite::{WebSocket, stream::MaybeTlsStream};
-
+use crate::pumpfun::swap::{SwapPublisher, SwapOrder};
 
 
 fn time_ago(timestamp: i64) -> String {
@@ -152,6 +152,15 @@ impl Processor for PumpfunInstructionProcessor {
                 }
 
                 if PUMP_USERS.contains(&user_str.as_str()) {
+                    SwapPublisher::publish_swap_order(SwapOrder {
+                        mint: trade_event.mint.to_string(),
+                        amount: token_amount.to_string(),
+                        price: token_price_in_sol.to_string(),
+                        bonding_curve: "".to_string(),
+                        associated_bonding_curve: "".to_string(),
+                        decimal: 6,
+                        is_buy: trade_event.is_buy,
+                    });
                     if trade_event.is_buy {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
                     } else {
