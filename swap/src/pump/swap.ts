@@ -32,6 +32,8 @@ import { sendRawTransactionOrBundle, signV0Transaction, trySimulateTransaction }
 import { Wallet } from '@coral-xyz/anchor'
 import { getFeeInstruction, getJitoFeeInstruction } from '../utils/swap.instructions'
 
+const alreadySwappedBuy: string[] = []
+const alreadySwappedSell: string[] = []
 
 export async function pumpFunSwap(
     payerPrivateKey: string,
@@ -47,6 +49,25 @@ export async function pumpFunSwap(
     mevFee: number,
 ): Promise<any> {
     try {
+        if (is_buy) {
+            if (alreadySwappedBuy.includes(mintStr)) {
+                return {
+                    success: false,
+                    error: 'Already swapped',
+                    txHash: '',
+                }
+            }
+            alreadySwappedBuy.push(mintStr)
+        } else {
+            if (alreadySwappedSell.includes(mintStr)) {
+                return {
+                    success: false,
+                    error: 'Already swapped',
+                    txHash: '',
+                }
+            }
+            alreadySwappedSell.push(mintStr)
+        }
 
         const jitoFeeValueWei = is_buy ? BigInt((mevFee * 10 ** 9).toFixed()) : BigInt(0)
 

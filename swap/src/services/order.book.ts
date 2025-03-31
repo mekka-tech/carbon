@@ -20,6 +20,8 @@ export interface Order {
     pnl: number;
     status: OrderStatus;
     origin: string;
+    bonding_curve: string;
+    associated_bonding_curve: string;
 }
 
 export class OrderBook {
@@ -47,7 +49,7 @@ export class OrderBook {
     }
     
     // Process a trade
-    processTrade(mint: string, side: Side, price: number, amount: number, origin: string, signature: string): Order | undefined {
+    processTrade(mint: string, side: Side, price: number, amount: number, origin: string, signature: string, bondingCurve: string, associatedBondingCurve: string): Order | undefined {
         const order = this._getOrder(mint);
         if (!order) {
             return this._addOrder({
@@ -60,7 +62,9 @@ export class OrderBook {
                 timestamp_sold: 0,
                 pnl: 0,
                 status: OrderStatus.PENDING,
-                origin: origin
+                origin: origin,
+                bonding_curve: bondingCurve,
+                associated_bonding_curve: associatedBondingCurve
             });
         } else if (order.status === OrderStatus.PENDING && side === Side.BUY) {
             let text = 'Order =>'
@@ -81,7 +85,9 @@ export class OrderBook {
                 timestamp_sold: 0,
                 pnl: 0,
                 status: OrderStatus.OPEN,
-                origin: origin
+                origin: origin,
+                bonding_curve: bondingCurve,
+                associated_bonding_curve: associatedBondingCurve
             });
         } else if (order.status === OrderStatus.OPEN && side === Side.SELL) {
             const priceDiff = price - order.price_bought;

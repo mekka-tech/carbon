@@ -1,6 +1,6 @@
+import 'dotenv/config';
 import * as WebSocket from 'ws';
-import { OrderBook, OrderStatus, Side } from './services/order.book';
-import axios from 'axios';
+import { OrderBook, Side, OrderStatus } from './services/order.book';
 import { DiscordWebhookService } from './services/discord.webhook';
 import { nonBlockingWrapper } from './utils/nonBlockingWrapper';
 import { pumpFunSwap } from './pump/swap';
@@ -45,7 +45,7 @@ enum Origin {
 }
 
 
-const CREATORS = ['CkMbUezSZm6eteRBg5vJLDmxXL4YcSPT6zJtrBwjDWU4']
+const CREATORS = ['744ZryTiFQ1LDySKUikc93M7MT7ZdB3DnFGsrT1gYhNW']
 
 const BUY_AMOUNT = 0.1
 const SOL_PRICE = 130
@@ -67,39 +67,61 @@ wss.on('connection', (ws: WebSocket) => {
     
     if (CREATORS.includes(data.creator)) {
       // Process the trade
-      orderBook.processTrade(
+      const order = orderBook.processTrade(
         data.mint,
         side,
         price,
         amount,
         data.origin,
-        data.signature
-      );  
+        data.signature,
+        data.bonding_curve,
+        data.associated_bonding_curve
+      );
     } else {
-      nonBlockingWrapper(async () => {
-        await pumpFunSwap(
-          '',
-          data.mint,
-          tokenPriceOnSol * LAMPORTS_PER_SOL,
-          data.bonding_curve,
-          data.associated_bonding_curve,
-          data.decimal,
-          data.is_buy,
-          BUY_AMOUNT,
-          GAS_FEE,
-          SLIPPAGE,
-          MEV_FEE
-        )
-      })
-      // TODO: SWAP!
-      orderBook.processTrade(
+      const order = orderBook.processTrade(
         data.mint,
         side,
         price,
         amount,
         data.origin,
-        data.signature
+        data.signature,
+        data.bonding_curve,
+        data.associated_bonding_curve
       );  
+      if (order && order.status === OrderStatus.PENDING) {
+        console.log('PENDING ORDER GENERATED =>', data.mint)
+        nonBlockingWrapper(async () => {
+          await pumpFunSwap(
+            process.env.PRIVATE_KEY!,
+            data.mint,
+            tokenPriceOnSol * LAMPORTS_PER_SOL,
+            data.bonding_curve,
+            data.associated_bonding_curve,
+            data.decimal,
+            data.is_buy,
+            BUY_AMOUNT,
+            GAS_FEE,
+            SLIPPAGE,
+            MEV_FEE
+          )
+        })
+      } else if (order && order.status === OrderStatus.CLOSED) {
+        nonBlockingWrapper(async () => {
+          await pumpFunSwap(
+            process.env.PRIVATE_KEY!,
+            data.mint,
+            tokenPriceOnSol * LAMPORTS_PER_SOL,
+            data.bonding_curve,
+            data.associated_bonding_curve,
+            data.decimal,
+            data.is_buy,
+            order.amount_bought,
+            GAS_FEE,
+            SLIPPAGE,
+            MEV_FEE
+          )
+        })
+      }
     }
     
   });
