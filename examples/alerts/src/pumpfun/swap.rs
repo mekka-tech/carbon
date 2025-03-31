@@ -36,7 +36,7 @@ impl SwapPublisher {
   }
 
   async fn _publish_swap_order(
-    self,
+    &mut self,
     swap_order: &SwapOrder,
   ) -> CarbonResult<()> {
     let message = serde_json::to_string(&swap_order).unwrap_or("{}".to_string());
