@@ -22,6 +22,9 @@ interface SwapOrder {
   timestamp: number;
 }
 
+
+const CREATORS = ['CkMbUezSZm6eteRBg5vJLDmxXL4YcSPT6zJtrBwjDWU4']
+
 // Handle new connections
 wss.on('connection', (ws: WebSocket) => {
   console.log('Client connected');
@@ -38,7 +41,7 @@ wss.on('connection', (ws: WebSocket) => {
     
     // Process the trade
     const order = orderBook.processTrade(
-      data.origin,
+      CREATORS[0],
       data.mint,
       side,
       price,

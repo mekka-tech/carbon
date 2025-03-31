@@ -29,26 +29,26 @@ export class OrderBook {
     }
     
     // Get an order by creator and mint
-    _getOrder(creator: string, mint: string): Order | undefined {
-        const creatorOrders = this.orders.get(creator);
+    _getOrder(mint: string, creator: string): Order | undefined {
+        const creatorOrders = this.orders.get(mint);
         if (!creatorOrders) return undefined;
-        return creatorOrders.get(mint);
+        return creatorOrders.get(creator);
     }
     
     // Add or update an order
-    _addOrder(creator: string, order: Order): Order {
-        if (!this.orders.has(creator)) {
-            this.orders.set(creator, new Map());
+    _addOrder(order: Order): Order {
+        if (!this.orders.has(order.mint)) {
+            this.orders.set(order.mint, new Map());
         }
-        this.orders.get(creator)!.set(order.mint, order);
+        this.orders.get(order.mint)!.set(order.creator, order);
         return order;
     }
     
     // Process a trade
     processTrade(creator: string, mint: string, side: Side, price: number, amount: number): Order | undefined {
-        const order = this._getOrder(creator, mint);
+        const order = this._getOrder(mint, creator);
         if (!order && side === Side.BUY) {
-            return this._addOrder(creator, {
+            return this._addOrder({
                 creator,
                 mint,
                 amount_bought: amount,
