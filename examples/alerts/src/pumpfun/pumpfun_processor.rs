@@ -160,7 +160,7 @@ impl Processor for PumpfunInstructionProcessor {
 
                 let mut order_book = ORDER_BOOK.lock().unwrap();
 
-                match order_book.get_position(user_str.as_str(), trade_event.mint.to_string().as_str()) {
+                match order_book.get_position_by_mint(trade_event.mint.to_string().as_str()) {
                     Some(position) => {
                         // Make sure that position.current_price is not zero to avoid division by zero.
                     if position.current_price != 0.0 {
