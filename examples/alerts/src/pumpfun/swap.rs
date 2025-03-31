@@ -6,10 +6,13 @@ use std::{
 };
 use serde::{Serialize, Deserialize};
 use carbon_core::error::{Error, CarbonResult};
-use std::sync::{Mutex, Arc};
+
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
 
 // Global OnceCell to hold the initialized publisher, wrapped in a Box.
 static GLOBAL_SWAP_PUBLISHER: OnceCell<Box<SwapPublisher>> = OnceCell::new();
+pub static SOCKET: Lazy<Mutex<SwapPublisher>> = Lazy::new(|| Mutex::new(SwapPublisher::new()));
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapOrder {
@@ -23,39 +26,15 @@ pub struct SwapOrder {
 }
 
 pub struct SwapPublisher {
-  socket: Arc<Mutex<WebSocket<MaybeTlsStream<TcpStream>>>>,
+  pub socket: WebSocket<MaybeTlsStream<TcpStream>>,
 }
 
 impl SwapPublisher {
-  /// Asynchronously creates a new publisher instance and stores it globally.
-  pub async fn init() -> CarbonResult<()> {
+  fn new() -> Self {
     let (mut socket, response) = connect("ws://localhost:3012").expect("Can't connect");
-    socket.send(Message::Text("Copy Bot Started".into())).unwrap();
-    let publisher = SwapPublisher {
-      socket: Arc::new(Mutex::new(socket)),
-    };
-    GLOBAL_SWAP_PUBLISHER.set(Box::new(publisher));
-    Ok(())
-  }
-
-  async fn _publish_swap_order(
-    &self,
-    swap_order: SwapOrder,
-  ) -> CarbonResult<()> {
-    let message: String = serde_json::to_string(&swap_order).unwrap_or("{}".to_string());
-    self.socket.lock().unwrap().send(Message::Text(message.into())).unwrap();
-    Ok(())
-  }
-
-  /// Static async method to publish a SwapResult via the global instance.
-  /// This allows you to call:
-  pub async fn publish_swap_order(
-    swap_order: SwapOrder,
-  ) -> CarbonResult<()> {
-    if let Some(publisher) = GLOBAL_SWAP_PUBLISHER.get() {
-        publisher._publish_swap_order(swap_order).await
-    } else {
-        Err(Error::Custom("Global publisher not initialized".to_string()))
+    socket.send(Message::Text("Copy Bot Client Started".into())).unwrap_or(());
+    SwapPublisher {
+      socket,
     }
   }
 }
