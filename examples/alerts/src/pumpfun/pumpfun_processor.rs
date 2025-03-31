@@ -10,6 +10,7 @@ use {
         instruction::{DecodedInstruction, InstructionMetadata, NestedInstruction},
         metrics::MetricsCollection,
         processor::Processor,
+        deserialize::ArrangeAccounts,
     },
     carbon_pumpfun_decoder::instructions::{PumpfunInstruction, buy::Buy, sell::Sell},
     core::time,
