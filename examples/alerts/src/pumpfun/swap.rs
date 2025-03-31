@@ -8,7 +8,7 @@ use serde::{Serialize, Deserialize};
 use carbon_core::error::{Error, CarbonResult};
 
 // Global OnceCell to hold the initialized publisher, wrapped in a Box.
-static GLOBAL_SWAP_PUBLISHER: OnceCell<Box<SwapPublisher>> = OnceCell::new();
+static GLOBAL_SWAP_PUBLISHER: OnceCell<&mut Box<SwapPublisher>> = OnceCell::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapOrder {
@@ -30,8 +30,8 @@ impl SwapPublisher {
   pub async fn init() -> CarbonResult<()> {
     let (mut socket, response) = connect("ws://localhost:3012").expect("Can't connect");
     socket.send(Message::Text("Copy Bot Started".into())).unwrap();
-    let publisher = SwapPublisher { socket };
-    GLOBAL_SWAP_PUBLISHER.set(Box::new(publisher));
+    let publisher = SwapPublisher { socket: &mut socket };
+    GLOBAL_SWAP_PUBLISHER.set(&mut Box::new(&mut publisher));
     Ok(())
   }
 
