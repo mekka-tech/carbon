@@ -72,16 +72,18 @@ export class OrderBook {
                 order.amount_sold += order.amount_bought;
                 order.price_sold = price;
                 order.timestamp_sold = Date.now();
-                order.pnl = (order.amount_sold * order.price_sold) - (order.amount_bought * order.price_bought);
+                order.pnl = pnl;
                 order.status = OrderStatus.CLOSED;
                 order.origin = origin;
+                console.log('POSITION CLOSED')
             } else if (origin === 'stop_loss' || origin === 'take_profit') {
                 order.amount_sold += order.amount_bought;
                 order.price_sold = price;
                 order.timestamp_sold = Date.now();
-                order.pnl = (order.amount_sold * order.price_sold) - (order.amount_bought * order.price_bought);
+                order.pnl = pnl;
                 order.status = OrderStatus.CLOSED;
                 order.origin = origin;
+                console.log('POSITION CLOSED')
             } else {
                 return undefined;
             }

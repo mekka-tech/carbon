@@ -26,7 +26,8 @@ interface SwapOrder {
 enum Origin {
   STOP_LOSS = 'stop_loss',
   TAKE_PROFIT = 'take_profit',
-  NORMAL = 'normal'
+  NORMAL = 'normal',
+  UPDATE = 'update',
 }
 
 

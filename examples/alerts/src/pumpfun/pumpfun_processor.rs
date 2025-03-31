@@ -212,7 +212,7 @@ impl Processor for PumpfunInstructionProcessor {
                 }
                 }
 
-                if OUR_WALLETS.contains(&user_str.as_str()) {
+                if PUMP_USERS.contains(&user_str.as_str()) {
                     if trade_event.is_buy {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
                     } else {
