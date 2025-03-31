@@ -1,6 +1,7 @@
 use once_cell::sync::OnceCell;
 use tungstenite::{WebSocket, stream::MaybeTlsStream};
 use std::fmt;
+use serde::{Serialize, Deserialize};
 
 // Global OnceCell to hold the initialized publisher, wrapped in a Box.
 static GLOBAL_SWAP_PUBLISHER: OnceCell<Box<SwapPublisher>> = OnceCell::new();
