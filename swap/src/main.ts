@@ -20,6 +20,7 @@ interface SwapOrder {
   is_buy: boolean;
   origin: string;
   timestamp: number;
+  signature: string;
 }
 enum Origin {
   STOP_LOSS = 'stop_loss',
@@ -39,8 +40,8 @@ wss.on('connection', (ws: WebSocket) => {
   // Handle messages from clients
   ws.on('message', (message: Buffer) => {
     const data = JSON.parse(message.toString('utf-8')) as SwapOrder;
-    console.log('Followed Wallet Action=>', data.is_buy ? 'BUY' : 'SELL', 'Token=>', data.mint, 'Amount=>', data.amount, 'Sol Amount=>', data.sol_amount);
-    
+    // console.log('Followed Wallet Action=>', data.is_buy ? 'BUY' : 'SELL', 'Token=>', data.mint, 'Amount=>', data.amount, 'Sol Amount=>', data.sol_amount);
+    console.log(`https://solscan.io/tx/${data.signature}`)
     // Process the trade in the order book
     const side = data.is_buy ? Side.BUY : Side.SELL;
     const price = parseFloat(data.sol_amount) / parseFloat(data.amount) * SOL_PRICE;
@@ -59,10 +60,10 @@ wss.on('connection', (ws: WebSocket) => {
     if (order) {
       let text = 'Order =>'
       if (side === Side.BUY) {
-        text = `BUY Token=> ${order.mint} Amount=> ${order.amount_bought} Price=> $${order.price_bought} USDC`
+        text = `BUY [${order.mint}] => ${order.amount_bought} => $${order.price_bought} USD => ${data.sol_amount} SOL`
       } else {
-        text = `SELL Token=> ${order.mint} Amount=> ${order.amount_sold} Price=> $${order.price_sold} USDC`
-        text += `\nPNL=> $${order.pnl} USDC`
+        text = `SELL [${order.mint}] => ${order.amount_sold} => $${order.price_sold} USD => ${data.sol_amount} SOL`
+        text += `\nPNL=> $${order.pnl} USD`
       }
       console.log(text);
     }
