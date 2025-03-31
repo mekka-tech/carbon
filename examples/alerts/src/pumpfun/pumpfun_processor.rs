@@ -92,9 +92,18 @@ impl Processor for PumpfunInstructionProcessor {
         match instruction.data {
             PumpfunInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
                 Some(accounts) => {
-                    log::info!(
-                        "Buy: signature: {signature}, buy: {buy:?}, accounts: {accounts:#?}"
-                    );
+                    let user_str = metadata.transaction_metadata.fee_payer.to_string();
+                    let mut socket = SOCKET.lock().unwrap();
+                    let body = serde_json::to_string(&SwapOrder {
+                        mint: accounts.mint.to_string(),
+                        amount: buy.amount.to_string(),
+                        price: buy.max_sol_cost.to_string(),
+                        bonding_curve: accounts.bonding_curve.to_string(),
+                        associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
+                        decimal: 6,
+                        is_buy: true,
+                    }).unwrap();
+                    socket.socket.send(Message::Text(body.into())).unwrap_or(());
                 }
                 None => log::error!("Failed to arrange accounts for Buy {}", accounts.len()),
             },
@@ -152,17 +161,6 @@ impl Processor for PumpfunInstructionProcessor {
                 }
 
                 if PUMP_USERS.contains(&user_str.as_str()) {
-                    let mut socket = SOCKET.lock().unwrap();
-                    let body = serde_json::to_string(&SwapOrder {
-                        mint: trade_event.mint.to_string(),
-                        amount: token_amount.to_string(),
-                        price: token_price_in_sol.to_string(),
-                        bonding_curve: "".to_string(),
-                        associated_bonding_curve: "".to_string(),
-                        decimal: 6,
-                        is_buy: trade_event.is_buy,
-                    }).unwrap();
-                    socket.socket.send(Message::Text(body.into())).unwrap_or(());
 
                     if trade_event.is_buy {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
