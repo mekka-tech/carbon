@@ -160,6 +160,13 @@ impl Processor for PumpfunInstructionProcessor {
                             // If you have a position quantity, you can also calculate total PNL.
                             // For example, if position has a `quantity` field:
                             let total_pnl = diff * position.quantity;
+
+                            if (pct_diff <= 10) {
+                                println!("STOP LOSS, Possible PNL: ${:.6}", total_pnl);
+                            } else if (pct_diff >= 30) {
+                                println!("TAKE PROFIT, Possible PNL: ${:.6}", total_pnl);
+                            }
+
                             println!(
                                 "[{}] Position Tracking - [{}] \nBought Price: ${:.6}, Current Price: ${:.6}, Diff: ${:.6} ({:.6}%), Possible PNL: ${:.6}",
                                 metadata.transaction_metadata.slot,
