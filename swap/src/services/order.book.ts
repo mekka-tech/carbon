@@ -46,9 +46,17 @@ export class OrderBook {
     }
     
     // Process a trade
-    processTrade(creator: string, mint: string, side: Side, price: number, amount: number, origin: string): Order | undefined {
+    processTrade(creator: string, mint: string, side: Side, price: number, amount: number, origin: string, signature: string): Order | undefined {
         const order = this._getOrder(mint, creator);
         if (!order && side === Side.BUY) {
+            let text = 'Order =>'
+            if (side === Side.BUY) {
+              text = `[${creator}] [${mint}] BUY => ${amount} => $${price} USD => ${price * amount} TOTAL`
+            } else {
+              text = `[${creator}] [${mint}] SELL => ${amount} => $${price} USD => ${price * amount} TOTAL`;
+            }
+            console.log(text);
+            console.log(`https://solscan.io/tx/${signature}`)
             return this._addOrder({
                 creator,
                 mint,
@@ -66,8 +74,6 @@ export class OrderBook {
             const priceDiff = price - order.price_bought;
             const pnl_percentage = (priceDiff / order.price_bought) * 100;
             const pnl = priceDiff * order.amount_bought
-            console.log(price, order.price_bought)
-            console.log(`[${order.creator}] [${order.mint}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%)`)
             if (pnl_percentage >= 20 && origin === 'normal') {
                 order.amount_sold += order.amount_bought;
                 order.price_sold = price;
@@ -75,6 +81,7 @@ export class OrderBook {
                 order.pnl = pnl;
                 order.status = OrderStatus.CLOSED;
                 order.origin = origin;
+                console.log(`[${order.creator}] [${order.mint}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%)`)
                 console.log('POSITION CLOSED')
             } else if (origin === 'stop_loss' || origin === 'take_profit') {
                 order.amount_sold += order.amount_bought;
@@ -83,6 +90,7 @@ export class OrderBook {
                 order.pnl = pnl;
                 order.status = OrderStatus.CLOSED;
                 order.origin = origin;
+                console.log(`[${order.creator}] [${order.mint}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%)`)
                 console.log('POSITION CLOSED')
             } else {
                 return undefined;

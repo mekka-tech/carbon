@@ -48,25 +48,15 @@ wss.on('connection', (ws: WebSocket) => {
     const amount = parseFloat(data.amount);
     
     // Process the trade
-    const order = orderBook.processTrade(
+    orderBook.processTrade(
       data.creator,
       data.mint,
       side,
       price,
       amount,
-      data.origin
+      data.origin,
+      data.signature
     );
-
-    if (order) {
-      let text = 'Order =>'
-      if (side === Side.BUY) {
-        text = `[${data.creator}] [${order.mint}] BUY => ${order.amount_bought} => $${order.price_bought} USD => ${data.sol_amount} SOL`
-      } else {
-        text = `[${data.creator}] [${order.mint}] SELL => ${order.amount_sold} => $${order.price_sold} USD => ${data.sol_amount} SOL`;
-      }
-      console.log(text);
-      console.log(`https://solscan.io/tx/${data.signature}`)
-    }
     
   });
 
