@@ -18,7 +18,7 @@ pub static SOCKET: Lazy<Mutex<SwapPublisher>> = Lazy::new(|| Mutex::new(SwapPubl
 pub struct SwapOrder {
   pub mint: String,
   pub amount: String,
-  pub price: String,
+  pub sol_amount: String,
   pub bonding_curve: String,
   pub associated_bonding_curve: String,
   pub decimal: u8,

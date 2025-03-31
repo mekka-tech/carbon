@@ -99,11 +99,11 @@ impl Processor for PumpfunInstructionProcessor {
                         let body = serde_json::to_string(&SwapOrder {
                             mint: accounts.mint.to_string(),
                             amount: buy.amount.to_string(),
-                            maxSolCost: buy.max_sol_cost.to_string(),
-                            bondingCurve: accounts.bonding_curve.to_string(),
-                            associatedBondingCurve: accounts.associated_bonding_curve.to_string(),
+                            sol_amount: buy.max_sol_cost.to_string(),
+                            bonding_curve: accounts.bonding_curve.to_string(),
+                            associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
                             decimal: 6,
-                            isBuy: true,
+                            is_buy: true,
                         }).unwrap();
                         socket.socket.send(Message::Text(body.into())).unwrap_or(());
                     }
@@ -118,11 +118,11 @@ impl Processor for PumpfunInstructionProcessor {
                         let body = serde_json::to_string(&SwapOrder {
                             mint: accounts.mint.to_string(),
                             amount: sell.amount.to_string(),
-                            maxSolCost: sell.max_sol_cost.to_string(),
-                            bondingCurve: accounts.bonding_curve.to_string(),
-                            associatedBondingCurve: accounts.associated_bonding_curve.to_string(),
+                            sol_amount: sell.min_sol_output.to_string(),
+                            bonding_curve: accounts.bonding_curve.to_string(),
+                            associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
                             decimal: 6,
-                            isBuy: false,
+                            is_buy: false,
                         }).unwrap();
                         socket.socket.send(Message::Text(body.into())).unwrap_or(());
                     }
