@@ -5,6 +5,7 @@ import { DiscordWebhookService } from './services/discord.webhook';
 import { nonBlockingWrapper } from './utils/nonBlockingWrapper';
 import { pumpFunSwap } from './pump/swap';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { getKeyPairFromPrivateKey } from './pump/utils';
 // Create a WebSocket server that listens on port 3012
 const wss = new WebSocket.Server({ port: 3012 });
 
@@ -45,82 +46,94 @@ enum Origin {
 }
 
 
+const payer = getKeyPairFromPrivateKey(process.env.PRIVATE_KEY!)
+
 const CREATORS = ['744ZryTiFQ1LDySKUikc93M7MT7ZdB3DnFGsrT1gYhNW']
 
 const BUY_AMOUNT = 0.1
 const SOL_PRICE = 130
-const GAS_FEE = 0.01
+const GAS_FEE = 0.005
 const SLIPPAGE = 50
-const MEV_FEE = 0.025
+const MEV_FEE = 0.005
 // Handle new connections
 wss.on('connection', (ws: WebSocket) => {
   console.log('Client connected');
 
   // Handle messages from clients
-  ws.on('message', (message: Buffer) => {
+  ws.on('message', async (message: Buffer) => {
     const data = JSON.parse(message.toString('utf-8')) as SwapOrder;
     // Process the trade in the order book
     const side = data.is_buy ? Side.BUY : Side.SELL;
     const tokenPriceOnSol = parseFloat(data.sol_amount) / parseFloat(data.amount)
-    const price = parseFloat(data.sol_amount) / parseFloat(data.amount) * SOL_PRICE;
     const amount = parseFloat(data.amount);
     
+    const previousOrderStatus = orderBook.getOrderStatus(data.mint)
     if (CREATORS.includes(data.creator)) {
-      // Process the trade
+      // Process my trade
       const order = orderBook.processTrade(
         data.mint,
         side,
-        price,
+        tokenPriceOnSol,
         amount,
         data.origin,
         data.signature,
         data.bonding_curve,
         data.associated_bonding_curve
       );
+      if (order && order.status === OrderStatus.CLOSED && previousOrderStatus !== order.status) {
+        await pumpFunSwap(
+          payer,
+          data.mint,
+          tokenPriceOnSol,
+          data.bonding_curve,
+          data.associated_bonding_curve,
+          6,
+          data.is_buy,
+          order.amount_bought,
+          GAS_FEE,
+          SLIPPAGE,
+          MEV_FEE
+        )
+      }
     } else {
       const order = orderBook.processTrade(
         data.mint,
         side,
-        price,
+        tokenPriceOnSol,
         amount,
         data.origin,
         data.signature,
         data.bonding_curve,
         data.associated_bonding_curve
-      );  
-      if (order && order.status === OrderStatus.PENDING) {
-        console.log('PENDING ORDER GENERATED =>', data.mint)
-        nonBlockingWrapper(async () => {
-          await pumpFunSwap(
-            process.env.PRIVATE_KEY!,
-            data.mint,
-            tokenPriceOnSol * LAMPORTS_PER_SOL,
-            data.bonding_curve,
-            data.associated_bonding_curve,
-            data.decimal,
-            data.is_buy,
-            BUY_AMOUNT,
-            GAS_FEE,
-            SLIPPAGE,
-            MEV_FEE
-          )
-        })
-      } else if (order && order.status === OrderStatus.CLOSED) {
-        nonBlockingWrapper(async () => {
-          await pumpFunSwap(
-            process.env.PRIVATE_KEY!,
-            data.mint,
-            tokenPriceOnSol * LAMPORTS_PER_SOL,
-            data.bonding_curve,
-            data.associated_bonding_curve,
-            data.decimal,
-            data.is_buy,
-            order.amount_bought,
-            GAS_FEE,
-            SLIPPAGE,
-            MEV_FEE
-          )
-        })
+      ); 
+      if (order && order.status === OrderStatus.PENDING && previousOrderStatus !== order.status && data.is_buy === true) {
+        await pumpFunSwap(
+          payer,
+          data.mint,
+          tokenPriceOnSol,
+          data.bonding_curve,
+          data.associated_bonding_curve,
+          6,
+          data.is_buy,
+          BUY_AMOUNT,
+          GAS_FEE,
+          SLIPPAGE,
+          MEV_FEE
+        )
+      } else if (order && order.status === OrderStatus.CLOSED && previousOrderStatus !== order.status && data.is_buy === false) {
+        await pumpFunSwap(
+          payer,
+          data.mint,
+          tokenPriceOnSol,
+          data.bonding_curve,
+          data.associated_bonding_curve,
+          6,
+          data.is_buy,
+          order.amount_bought,
+          GAS_FEE,
+          SLIPPAGE,
+          MEV_FEE
+        )
       }
     }
     

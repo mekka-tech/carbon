@@ -47,11 +47,14 @@ export class OrderBook {
         this.orders.set(order.mint, order);
         return order;
     }
+    getOrderStatus(mint: string): OrderStatus | undefined {
+        return this._getOrder(mint)?.status;
+    }
     
     // Process a trade
     processTrade(mint: string, side: Side, price: number, amount: number, origin: string, signature: string, bondingCurve: string, associatedBondingCurve: string): Order | undefined {
         const order = this._getOrder(mint);
-        if (!order) {
+        if (!order && side === Side.BUY) {
             return this._addOrder({
                 mint,
                 amount_bought: amount,
@@ -66,7 +69,7 @@ export class OrderBook {
                 bonding_curve: bondingCurve,
                 associated_bonding_curve: associatedBondingCurve
             });
-        } else if (order.status === OrderStatus.PENDING && side === Side.BUY) {
+        } else if (order && order.status === OrderStatus.PENDING && side === Side.BUY) {
             let text = 'Order =>'
             if (side === Side.BUY) {
               text = `[${mint}] BUY => ${amount} => $${price} USD => ${price * amount} TOTAL`
@@ -89,7 +92,7 @@ export class OrderBook {
                 bonding_curve: bondingCurve,
                 associated_bonding_curve: associatedBondingCurve
             });
-        } else if (order.status === OrderStatus.OPEN && side === Side.SELL) {
+        } else if (order && order.status === OrderStatus.OPEN && side === Side.SELL) {
             const priceDiff = price - order.price_bought;
             const pnl_percentage = (priceDiff / order.price_bought) * 100;
             const pnl = priceDiff * order.amount_bought

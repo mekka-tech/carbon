@@ -2,7 +2,7 @@ import { ComputeBudgetProgram, Keypair } from '@solana/web3.js'
 import { Connection, PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction } from '@solana/web3.js'
 import bs58 from 'bs58'
 
-export async function getKeyPairFromPrivateKey(key: string) {
+export function getKeyPairFromPrivateKey(key: string) {
     return Keypair.fromSecretKey(new Uint8Array(bs58.decode(key)))
 }
 

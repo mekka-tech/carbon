@@ -1,4 +1,5 @@
 import {
+    Keypair,
     LAMPORTS_PER_SOL,
     PublicKey,
     SystemProgram,
@@ -36,7 +37,7 @@ const alreadySwappedBuy: string[] = []
 const alreadySwappedSell: string[] = []
 
 export async function pumpFunSwap(
-    payerPrivateKey: string,
+    payer: Keypair,
     mintStr: string,
     price: number,
     bondingCurve: string,
@@ -73,7 +74,6 @@ export async function pumpFunSwap(
 
         const txBuilder = new Transaction()
 
-        const payer = await getKeyPairFromPrivateKey(payerPrivateKey)
         const owner = payer.publicKey
         const mint = new PublicKey(mintStr)
         const slippage = _slippage / 100
@@ -82,6 +82,13 @@ export async function pumpFunSwap(
         const inDecimal = is_buy ? 9 : decimal
 
         let amountWithDecimals = Math.floor(_amount * 10 ** inDecimal)
+
+        console.log(' - Amount with decimals', amountWithDecimals)
+        console.log(' - Price', price)
+        console.log(' - Slippage', slippage)
+        console.log(' - Is_buy', is_buy)
+        console.log(' - In Decimal', inDecimal)
+        console.log(' - _amount', _amount)
 
         const tokenAccountIn = getAssociatedTokenAddressSync(is_buy ? NATIVE_MINT : mint, owner, true)
         const tokenAccountOut = getAssociatedTokenAddressSync(is_buy ? mint : NATIVE_MINT, owner, true)
@@ -95,18 +102,23 @@ export async function pumpFunSwap(
 
         if (is_buy) {
 
-            const tokenOut = Math.floor((amountWithDecimals * price) / LAMPORTS_PER_SOL)
+            const tokenOut = Math.floor(_amount / price) * 10 ** 6
             const solInWithSlippage = amountWithDecimals * (1 + slippage)
-            const maxSolCost = Math.floor(solInWithSlippage * LAMPORTS_PER_SOL)
+            const maxSolCost = Math.floor(solInWithSlippage)
 
             data = Buffer.concat([bufferFromUInt64('16927863322537952870'), bufferFromUInt64(tokenOut), bufferFromUInt64(maxSolCost)])
 
+            console.log(' - Token out', tokenOut)
+            console.log(' - Sol in with slippage', solInWithSlippage)
+            console.log(' - Max sol cost', maxSolCost)
+            console.log(' - Data', data)
             quoteAmount = tokenOut
             amountWithDecimals = amountWithDecimals
         } else {
-            const minSolOutput = Math.floor(((_amount * price) * LAMPORTS_PER_SOL) * (1 - slippage))
+            const minSolOutput = Math.floor((amountWithDecimals * price) * (1 - slippage))
             data = Buffer.concat([bufferFromUInt64('12502976635542562355'), bufferFromUInt64(amountWithDecimals), bufferFromUInt64(minSolOutput)])
             quoteAmount = minSolOutput
+            console.log(' - Min sol output', minSolOutput)
         }
 
         const instruction = new TransactionInstruction({
@@ -153,10 +165,12 @@ export async function pumpFunSwap(
 
         await trySimulateTransaction(transaction)
 
+        console.time('sendRawTransactionOrBundle')
         const { bundleId, signature } = await sendRawTransactionOrBundle(transaction, is_buy ? mevFee : 0)
+        console.timeEnd('sendRawTransactionOrBundle')
 
         const quote = { inAmount: amountWithDecimals, outAmount: quoteAmount }
-
+        console.log(' - Swap pump token is success', bundleId, `\n https://solscan.io/tx/${signature}`)
         return {
             quote,
             total_fee_in_sol: total_fee_in_sol || 0,
