@@ -90,7 +90,7 @@ impl Processor for PumpfunInstructionProcessor {
         (metadata, instruction, _nested_instructions): Self::InputType,
         _metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()> {
-        // let signature = metadata.transaction_metadata.signature;
+        let signature = metadata.transaction_metadata.signature;
         let accounts = instruction.accounts;
         
         match instruction.data {
@@ -111,6 +111,7 @@ impl Processor for PumpfunInstructionProcessor {
                             is_buy: true,
                             origin: "normal".to_string(),
                             timestamp: Utc::now().timestamp(),
+                            signature: signature.to_string(),
                         }).unwrap();
                         socket.socket.send(Message::Text(body.into())).unwrap_or(());
                     }
@@ -134,6 +135,7 @@ impl Processor for PumpfunInstructionProcessor {
                             is_buy: false,
                             origin: "normal".to_string(),
                             timestamp: Utc::now().timestamp(),
+                            signature: signature.to_string(),
                         }).unwrap();
                         socket.socket.send(Message::Text(body.into())).unwrap_or(());
                     }
@@ -180,6 +182,7 @@ impl Processor for PumpfunInstructionProcessor {
                                 is_buy: false,
                                 origin: if pct_diff <= 10.0 { "stop_loss".to_string() } else { "take_profit".to_string() },
                                 timestamp: Utc::now().timestamp(),
+                                signature: signature.to_string(),
                             }).unwrap();
                             socket.socket.send(Message::Text(body.into())).unwrap_or(());
                         }

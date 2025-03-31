@@ -25,6 +25,7 @@ pub struct SwapOrder {
   pub is_buy: bool,
   pub origin: String,
   pub timestamp: i64,
+  pub signature: String,
 }
 
 pub struct SwapPublisher {
