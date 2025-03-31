@@ -36,13 +36,13 @@ export async function sendRawTransactionOrBundle(transaction: VersionedTransacti
     const signature = getSignature(transaction)
 
     if (jitoFeeValueWei == 0) {
-        await connection.sendRawTransaction(rawTransaction)
+        await private_connection.sendRawTransaction(rawTransaction)
         console.log(`https://solscan.io/tx/${signature}`)
         return { bundleId: '', signature }
     }
 
     const jitoBundleInstance = new JitoBundleService()
-    const bundleId = await jitoBundleInstance.sendBundle(rawTransaction)
+    const bundleId = await jitoBundleInstance.sendTransaction(rawTransaction)
     if (!bundleId) throw new Error('JITO_BUNDLE_ERROR')
     console.log(`https://solscan.io/tx/${signature}`)
     return { bundleId, signature }

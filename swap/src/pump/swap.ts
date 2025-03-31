@@ -184,7 +184,6 @@ export async function pumpFunSwap(
                 alreadySwappedSell.splice(alreadySwappedSell.indexOf(mintStr), 1)
                 order.status = OrderStatus.OPEN
                 orderBook._updateOrder(order)
-
             }
         }
 

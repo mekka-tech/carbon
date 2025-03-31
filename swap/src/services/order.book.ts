@@ -74,30 +74,24 @@ export class OrderBook {
                 associated_bonding_curve: associatedBondingCurve
             });
         } else if (order && order.status === OrderStatus.PENDING && side === Side.BUY) {
+            if (origin !== 'normal') { return undefined }
             console.log('============================= OPEN ORDER ====================================')
             let text = 'Order =>'
             if (side === Side.BUY) {
-              text = `[${mint}] BUY => ${amount} => $${price} USD => ${price * amount} TOTAL`
+              text = `[${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}]  BUY => ${amount} => $${price} USD => ${price * amount} TOTAL`
             } else {
-              text = `[${mint}] SELL => ${amount} => $${price} USD => ${price * amount} TOTAL`;
+              text = `[${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}]  SELL => ${amount} => $${price} USD => ${price * amount} TOTAL`;
             }
             console.log(text);
             console.log(`https://solscan.io/tx/${signature}`)
             console.log(`---------------------------------------------`)
-            return this._updateOrder({
-                mint,
-                amount_bought: amount,
-                amount_sold: 0,
-                price_bought: price,
-                price_sold: 0,
-                timestamp_bought: Date.now(),
-                timestamp_sold: 0,
-                pnl: 0,
-                status: OrderStatus.OPEN,
-                origin: origin,
-                bonding_curve: bondingCurve,
-                associated_bonding_curve: associatedBondingCurve
-            });
+            order.timestamp_bought = Date.now()
+            order.amount_bought = amount;
+            order.price_bought = price;
+            order.status = OrderStatus.OPEN
+            order.origin = origin
+
+            return this._updateOrder(order);
         } else if (order && order.status === OrderStatus.OPEN && side === Side.SELL) {
             const priceDiff = price - order.price_bought;
             const pnl_percentage = (priceDiff / order.price_bought) * 100;
