@@ -20,6 +20,7 @@ use pumpfun::pumpfun_processor::PumpfunInstructionProcessor;
 use raydium::amm_v4_processor::{RaydiumAmmV4AccountProcessor, RaydiumAmmV4InstructionProcessor};
 use raydium::clmm_processor::{RaydiumClmmAccountProcessor, RaydiumClmmInstructionProcessor};
 use raydium::cpmm_processor::{RaydiumCpmmAccountProcessor, RaydiumCpmmInstructionProcessor};
+use tungstenite::{connect, Message};
 use {
     crate::events::rabbit::RabbitMQPublisher,
     carbon_core::error::CarbonResult,
@@ -57,6 +58,9 @@ pub async fn main() -> CarbonResult<()> {
         })
         .init();
     dotenv::dotenv().ok();
+    let (mut socket, response) = connect("ws://localhost:3012").expect("Can't connect");
+
+
     let mut account_filters: HashMap<String, SubscribeRequestFilterAccounts> = HashMap::new();
     // account_filters.insert(
     //     "raydium_amm_v4_account_filter".to_string(),
@@ -171,7 +175,7 @@ pub async fn main() -> CarbonResult<()> {
     let yellowstone_grpc = YellowstoneGrpcGeyserClient::new(
         env::var("GEYSER_URL").unwrap_or_default(),
         env::var("X_TOKEN").ok(),
-        Some(CommitmentLevel::Confirmed),
+        Some(CommitmentLevel::Processed),
         account_filters,
         transaction_filters,
         Arc::new(RwLock::new(HashSet::new())),
@@ -189,12 +193,15 @@ pub async fn main() -> CarbonResult<()> {
     // )
     // .await?;
 
+    let mut processor = PumpfunInstructionProcessor::new();
+    processor.attach_socket(socket);
+
     carbon_core::pipeline::Pipeline::builder()
         .datasource(yellowstone_grpc)
         // .instruction(RaydiumAmmV4Decoder, RaydiumAmmV4InstructionProcessor)
         // .instruction(RaydiumClmmDecoder, RaydiumClmmInstructionProcessor)
         // .instruction(RaydiumCpmmDecoder, RaydiumCpmmInstructionProcessor)
-        .instruction(PumpfunDecoder, PumpfunInstructionProcessor)
+        .instruction(PumpfunDecoder, processor)
         // .instruction(TokenProgramDecoder, TokenProcessor)
         // .account(RaydiumAmmV4Decoder, RaydiumAmmV4AccountProcessor)
         // .account(RaydiumClmmDecoder, RaydiumClmmAccountProcessor)

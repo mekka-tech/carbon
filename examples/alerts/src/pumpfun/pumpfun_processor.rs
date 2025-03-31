@@ -11,13 +11,14 @@ use {
         metrics::MetricsCollection,
         processor::Processor,
     },
-    carbon_pumpfun_decoder::instructions::PumpfunInstruction,
+    carbon_pumpfun_decoder::instructions::{PumpfunInstruction, buy::Buy, sell::Sell},
     core::time,
     serde_json::Result,
     std::collections::HashMap,
     std::sync::Arc,
     chrono::{DateTime, Utc, TimeZone},
 };
+use tungstenite::WebSocket;
 
 
 
@@ -32,38 +33,50 @@ fn time_ago(timestamp: i64) -> String {
 }
 const SOL_PRICE: f64 = 131.6;
 // Define the list of valid pump user addresses.
+// const PUMP_USERS: &[&str] = &[
+//     "JDd3hy3gQn2V982mi1zqhNqUw1GfV2UL6g76STojCJPN",
+//     "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
+//     "AJ6MGExeK7FXmeKkKPmALjcdXVStXYokYNv9uVfDRtvo",
+//     "CyaE1VxvBrahnPWkqm5VsdCvyS2QmNht2UFrKJHga54o",
+//     "DNfuF1L62WWyW3pNakVkyGGFzVVhj4Yr52jSmdTyeBHm",
+//     "BCnqsPEtA1TkgednYEebRpkmwFRJDCjMQcKZMMtEdArc",
+//     "73LnJ7G9ffBDjEBGgJDdgvLUhD5APLonKrNiHsKDCw5B",
+//     "5rkPDK4JnVAumgzeV2Zu8vjggMTtHdDtrsd5o9dhGZHD",
+//     "6m5sW6EAPAHncxnzapi1ZVJNRb9RZHQ3Bj7FD84X9rAF",
+//     "4BdKaxN8G6ka4GYtQQWk4G4dZRUTX2vQH9GcXdBREFUk",
+//     "BCagckXeMChUKrHEd6fKFA1uiWDtcmCXMsqaheLiUPJd",
+//     "3pZ59YENxDAcjaKa3sahZJBcgER4rGYi4v6BpPurmsGj",
+//     "EHg5YkU2SZBTvuT87rUsvxArGp3HLeye1fXaSDfuMyaf",
+//     "8rvAsDKeAcEjEkiZMug9k8v1y8mW6gQQiMobd89Uy7qR",
+//     "7iabBMwmSvS4CFPcjW2XYZY53bUCHzXjCFEFhxeYP4CY",
+//     "As7HjL7dzzvbRbaD3WCun47robib2kmAKRXMvjHkSMB5",
+//     "96sErVjEN7LNJ6Uvj63bdRWZxNuBngj56fnT9biHLKBf",
+//     "F72vY99ihQsYwqEDCfz7igKXA5me6vN2zqVsVUTpw6qL",
+//     "215nhcAHjQQGgwpQSJQ7zR26etbjjtVdW74NLzwEgQjP",
+//     "GJA1HEbxGnqBhBifH9uQauzXSB53to5rhDrzmKxhSU65",
+//     "G3g1CKqKWSVEVURZDNMazDBv7YAhMNTjhJBVRTiKZygk",
+//     "BXNiM7pqt9Ld3b2Hc8iT3mA5bSwoe9CRrtkSUs15SLWN",
+//     "7ABz8qEFZTHPkovMDsmQkm64DZWN5wRtU7LEtD2ShkQ6",
+//     "EaVboaPxFCYanjoNWdkxTbPvt57nhXGu5i6m9m6ZS2kK",
+//     "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
+// ];
+
 const PUMP_USERS: &[&str] = &[
-    "JDd3hy3gQn2V982mi1zqhNqUw1GfV2UL6g76STojCJPN",
     "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
-    "AJ6MGExeK7FXmeKkKPmALjcdXVStXYokYNv9uVfDRtvo",
-    "CyaE1VxvBrahnPWkqm5VsdCvyS2QmNht2UFrKJHga54o",
-    "DNfuF1L62WWyW3pNakVkyGGFzVVhj4Yr52jSmdTyeBHm",
-    "BCnqsPEtA1TkgednYEebRpkmwFRJDCjMQcKZMMtEdArc",
-    "73LnJ7G9ffBDjEBGgJDdgvLUhD5APLonKrNiHsKDCw5B",
-    "5rkPDK4JnVAumgzeV2Zu8vjggMTtHdDtrsd5o9dhGZHD",
-    "6m5sW6EAPAHncxnzapi1ZVJNRb9RZHQ3Bj7FD84X9rAF",
-    "4BdKaxN8G6ka4GYtQQWk4G4dZRUTX2vQH9GcXdBREFUk",
-    "BCagckXeMChUKrHEd6fKFA1uiWDtcmCXMsqaheLiUPJd",
-    "3pZ59YENxDAcjaKa3sahZJBcgER4rGYi4v6BpPurmsGj",
-    "EHg5YkU2SZBTvuT87rUsvxArGp3HLeye1fXaSDfuMyaf",
-    "8rvAsDKeAcEjEkiZMug9k8v1y8mW6gQQiMobd89Uy7qR",
-    "7iabBMwmSvS4CFPcjW2XYZY53bUCHzXjCFEFhxeYP4CY",
-    "As7HjL7dzzvbRbaD3WCun47robib2kmAKRXMvjHkSMB5",
-    "96sErVjEN7LNJ6Uvj63bdRWZxNuBngj56fnT9biHLKBf",
-    "F72vY99ihQsYwqEDCfz7igKXA5me6vN2zqVsVUTpw6qL",
-    "215nhcAHjQQGgwpQSJQ7zR26etbjjtVdW74NLzwEgQjP",
-    "GJA1HEbxGnqBhBifH9uQauzXSB53to5rhDrzmKxhSU65",
-    "G3g1CKqKWSVEVURZDNMazDBv7YAhMNTjhJBVRTiKZygk",
-    "BXNiM7pqt9Ld3b2Hc8iT3mA5bSwoe9CRrtkSUs15SLWN",
-    "7ABz8qEFZTHPkovMDsmQkm64DZWN5wRtU7LEtD2ShkQ6",
-    "EaVboaPxFCYanjoNWdkxTbPvt57nhXGu5i6m9m6ZS2kK",
-    "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
 ];
 
 
 // const ORDER_BOOK: HashMap<String, f64> = HashMap::new();
 
-pub struct PumpfunInstructionProcessor;
+pub struct PumpfunInstructionProcessor {
+    pub socket: WebSocket,
+}
+
+impl PumpfunInstructionProcessor {
+    pub fn attach_socket(&mut self, socket: WebSocket) {
+        self.socket = socket;
+    }
+}
 
 #[async_trait]
 impl Processor for PumpfunInstructionProcessor {
@@ -79,12 +92,25 @@ impl Processor for PumpfunInstructionProcessor {
         _metrics: Arc<MetricsCollection>,
     ) -> CarbonResult<()> {
         // let signature = metadata.transaction_metadata.signature;
-        // let accounts = instruction.accounts;
-
+        let accounts = instruction.accounts;
+        
         match instruction.data {
-            // PumpfunInstruction::CreateEvent(create_event) => {
-            //     println!("\nNew token created: {:#?}", create_event);
-            // }
+            PumpfunInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
+                Some(accounts) => {
+                    log::info!(
+                        "Buy: signature: {signature}, buy: {buy:?}, accounts: {accounts:#?}"
+                    );
+                }
+                None => log::error!("Failed to arrange accounts for Buy {}", accounts.len()),
+            },
+            PumpfunInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
+                Some(accounts) => {
+                    log::info!(
+                        "Sell: signature: {signature}, sell: {sell:?}, accounts: {accounts:#?}"
+                    );
+                }
+                None => log::error!("Failed to arrange accounts for Sell {}", accounts.len()),
+            },
             PumpfunInstruction::TradeEvent(trade_event) => {
                 let user_str = trade_event.user.to_string();
                 // Normalize the raw amounts.
@@ -111,7 +137,8 @@ impl Processor for PumpfunInstructionProcessor {
                             // For example, if position has a `quantity` field:
                             let total_pnl = diff * position.quantity;
                             println!(
-                                "Position Tracking - [{}] \nBought Price: ${:.6}, Current Price: ${:.6}, Diff: ${:.6} ({:.6}%), Possible PNL: ${:.6}",
+                                "[{}] Position Tracking - [{}] \nBought Price: ${:.6}, Current Price: ${:.6}, Diff: ${:.6} ({:.6}%), Possible PNL: ${:.6}",
+                                metadata.transaction_metadata.slot,
                                 position.user,
                                 position.current_price,
                                 token_price_usd,

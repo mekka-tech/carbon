@@ -1,0 +1,14 @@
+[package]
+name = "ws"
+rust-version.workspace = true
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "ws"
+path = "main.rs"
+
+[dependencies]
+tungstenite = "0.26.2"
