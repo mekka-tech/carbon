@@ -170,7 +170,8 @@ pub async fn main() -> CarbonResult<()> {
     //         signature: None,
     //     },
     // );
-    SwapPublisher::init().await?;
+    SwapPublisher::init();
+
     
 
     let yellowstone_grpc = YellowstoneGrpcGeyserClient::new(
