@@ -41,7 +41,6 @@ wss.on('connection', (ws: WebSocket) => {
   // Handle messages from clients
   ws.on('message', (message: Buffer) => {
     const data = JSON.parse(message.toString('utf-8')) as SwapOrder;
-    // console.log('Followed Wallet Action=>', data.is_buy ? 'BUY' : 'SELL', 'Token=>', data.mint, 'Amount=>', data.amount, 'Sol Amount=>', data.sol_amount);
     // Process the trade in the order book
     const side = data.is_buy ? Side.BUY : Side.SELL;
     const price = parseFloat(data.sol_amount) / parseFloat(data.amount) * SOL_PRICE;
