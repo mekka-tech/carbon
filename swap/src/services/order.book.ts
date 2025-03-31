@@ -63,12 +63,24 @@ export class OrderBook {
                 origin: origin
             });
         } else if (order !== undefined && side === Side.SELL) {
-            order.amount_sold += amount;
-            order.price_sold = price;
-            order.timestamp_sold = Date.now();
-            order.pnl = (order.amount_sold * order.price_sold) - (order.amount_bought * order.price_bought);
-            order.status = OrderStatus.CLOSED;
-            order.origin = origin;
+            const pnl = (order.amount_sold * order.price_sold) - (order.amount_bought * order.price_bought)
+            const pnl_percentage = (pnl / (order.amount_bought * order.price_bought)) * 100
+            console.log(`[${order.mint}] PNL: ${pnl} PNL%: ${pnl_percentage}`)
+            if (pnl_percentage >= 20 && origin === 'normal') {
+                order.amount_sold += order.amount_bought;
+                order.price_sold = price;
+                order.timestamp_sold = Date.now();
+                order.pnl = (order.amount_sold * order.price_sold) - (order.amount_bought * order.price_bought);
+                order.status = OrderStatus.CLOSED;
+                order.origin = origin;
+            } else {
+                order.amount_sold += order.amount_bought;
+                order.price_sold = price;
+                order.timestamp_sold = Date.now();
+                order.pnl = (order.amount_sold * order.price_sold) - (order.amount_bought * order.price_bought);
+                order.status = OrderStatus.CLOSED;
+                order.origin = origin;
+            }
             return order;
         }
 
