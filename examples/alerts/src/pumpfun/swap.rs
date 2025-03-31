@@ -24,7 +24,7 @@ pub struct SwapOrder {
   pub decimal: u8,
   pub is_buy: bool,
   pub origin: String,
-  pub timestamp: u64,
+  pub timestamp: i64,
 }
 
 pub struct SwapPublisher {
@@ -34,7 +34,7 @@ pub struct SwapPublisher {
 impl SwapPublisher {
   fn new() -> Self {
     let (mut socket, response) = connect("ws://localhost:3012").expect("Can't connect");
-    socket.send(Message::Text("Copy Bot Client Started".into())).unwrap_or(());
+    socket.send(Message::Text("{\"message\": \"Copy Bot Client Started\"}".into())).unwrap_or(());
     SwapPublisher {
       socket,
     }
