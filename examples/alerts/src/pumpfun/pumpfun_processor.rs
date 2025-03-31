@@ -89,7 +89,7 @@ impl Processor for PumpfunInstructionProcessor {
         let accounts = instruction.accounts;
         
         match instruction.data {
-            MoonshotInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
+            PumpfunInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
                 Some(accounts) => {
                     log::info!(
                         "Buy: signature: {signature}, buy: {buy:?}, accounts: {accounts:#?}"
@@ -97,7 +97,7 @@ impl Processor for PumpfunInstructionProcessor {
                 }
                 None => log::error!("Failed to arrange accounts for Buy {}", accounts.len()),
             },
-            MoonshotInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
+            PumpfunInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
                 Some(accounts) => {
                     log::info!(
                         "Sell: signature: {signature}, sell: {sell:?}, accounts: {accounts:#?}"
