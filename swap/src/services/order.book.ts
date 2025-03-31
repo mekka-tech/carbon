@@ -83,6 +83,7 @@ export class OrderBook {
                 order.origin = origin;
                 console.log(`[${order.creator}] [${order.mint}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%)`)
                 console.log('POSITION CLOSED')
+                console.log(`https://solscan.io/tx/${signature}`)
             } else if (origin === 'stop_loss' || origin === 'take_profit') {
                 order.amount_sold += order.amount_bought;
                 order.price_sold = price;
@@ -92,6 +93,7 @@ export class OrderBook {
                 order.origin = origin;
                 console.log(`[${order.creator}] [${order.mint}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%)`)
                 console.log('POSITION CLOSED')
+                console.log(`https://solscan.io/tx/${signature}`)
             } else {
                 return undefined;
             }
