@@ -102,6 +102,7 @@ impl Processor for PumpfunInstructionProcessor {
                         let token_amount: f64 = buy.amount as f64 / 1e6;
                         let mut socket = SOCKET.lock().unwrap();
                         let body = serde_json::to_string(&SwapOrder {
+                            creator: user_str.to_string(),
                             mint: accounts.mint.to_string(),
                             amount: token_amount.to_string(),
                             sol_amount: sol_amount.to_string(),
@@ -126,6 +127,7 @@ impl Processor for PumpfunInstructionProcessor {
                         let token_amount: f64 = sell.amount as f64 / 1e6;
                         let mut socket = SOCKET.lock().unwrap();
                         let body = serde_json::to_string(&SwapOrder {
+                            creator: user_str.to_string(),
                             mint: accounts.mint.to_string(),
                             amount: token_amount.to_string(),
                             sol_amount: sol_amount.to_string(),
@@ -173,6 +175,7 @@ impl Processor for PumpfunInstructionProcessor {
                             println!("STOP LOSS, Possible PNL: ${:.6}", total_pnl);
                             let mut socket = SOCKET.lock().unwrap();
                             let body = serde_json::to_string(&SwapOrder {
+                                creator: user_str.to_string(),
                                 mint: trade_event.mint.to_string(),
                                 amount: token_amount.to_string(),
                                 sol_amount: sol_amount.to_string(),
