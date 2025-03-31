@@ -32,6 +32,7 @@ import {
 import { sendRawTransactionOrBundle, signV0Transaction, trySimulateTransaction } from '../utils/v0.transaction'
 import { Wallet } from '@coral-xyz/anchor'
 import { getFeeInstruction, getJitoFeeInstruction } from '../utils/swap.instructions'
+import { OrderBook, OrderStatus } from '../services/order.book'
 
 const alreadySwappedBuy: string[] = []
 const alreadySwappedSell: string[] = []
@@ -48,6 +49,7 @@ export async function pumpFunSwap(
     gasFee: number,
     _slippage: number,
     mevFee: number,
+    orderBook: OrderBook
 ): Promise<any> {
     try {
         if (is_buy) {
@@ -83,12 +85,6 @@ export async function pumpFunSwap(
 
         let amountWithDecimals = Math.floor(_amount * 10 ** inDecimal)
 
-        console.log(' - Amount with decimals', amountWithDecimals)
-        console.log(' - Price', price)
-        console.log(' - Slippage', slippage)
-        console.log(' - Is_buy', is_buy)
-        console.log(' - In Decimal', inDecimal)
-        console.log(' - _amount', _amount)
 
         const tokenAccountIn = getAssociatedTokenAddressSync(is_buy ? NATIVE_MINT : mint, owner, true)
         const tokenAccountOut = getAssociatedTokenAddressSync(is_buy ? mint : NATIVE_MINT, owner, true)
@@ -107,18 +103,12 @@ export async function pumpFunSwap(
             const maxSolCost = Math.floor(solInWithSlippage)
 
             data = Buffer.concat([bufferFromUInt64('16927863322537952870'), bufferFromUInt64(tokenOut), bufferFromUInt64(maxSolCost)])
-
-            console.log(' - Token out', tokenOut)
-            console.log(' - Sol in with slippage', solInWithSlippage)
-            console.log(' - Max sol cost', maxSolCost)
-            console.log(' - Data', data)
             quoteAmount = tokenOut
             amountWithDecimals = amountWithDecimals
         } else {
             const minSolOutput = Math.floor((amountWithDecimals * price) * (1 - slippage))
             data = Buffer.concat([bufferFromUInt64('12502976635542562355'), bufferFromUInt64(amountWithDecimals), bufferFromUInt64(minSolOutput)])
             quoteAmount = minSolOutput
-            console.log(' - Min sol output', minSolOutput)
         }
 
         const instruction = new TransactionInstruction({
@@ -130,14 +120,11 @@ export async function pumpFunSwap(
 
         const swapInstructions = txBuilder.instructions
 
-        console.log({ gasFee })
-
         const [feeInstruction, jitoFeeInstruction] = await Promise.all([
             getFeeInstruction(gasFee),
             getJitoFeeInstruction(payer as unknown as Wallet, Number(jitoFeeValueWei)),
         ])
 
-        console.log('Is_BUY', is_buy)
         const instructions: TransactionInstruction[] = is_buy
             ? [
                 ...feeInstruction,
@@ -170,7 +157,6 @@ export async function pumpFunSwap(
         console.timeEnd('sendRawTransactionOrBundle')
 
         const quote = { inAmount: amountWithDecimals, outAmount: quoteAmount }
-        console.log(' - Swap pump token is success', bundleId, `\n https://solscan.io/tx/${signature}`)
         return {
             quote,
             total_fee_in_sol: total_fee_in_sol || 0,
@@ -192,6 +178,15 @@ export async function pumpFunSwap(
         //     isToken2022,
         //     error,
         // })
+        if (!is_buy) {
+            const order = orderBook._getOrder(mintStr)
+            if (order?.status === OrderStatus.CLOSED)  {
+                alreadySwappedSell.splice(alreadySwappedSell.indexOf(mintStr), 1)
+                order.status = OrderStatus.OPEN
+                orderBook._updateOrder(order)
+
+            }
+        }
 
         console.log(' - Swap pump token is failed', error)
         return {

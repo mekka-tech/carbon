@@ -15,7 +15,7 @@ export const endpoints = {
     tokyo: 'https://tokyo.mainnet.block-engine.jito.wtf',
 }
 
-const regions = ['ams', 'ger', 'ny', 'tokyo'] as Region[] // "default",
+const regions = ['ams', 'ger', 'ny', 'tokyo', 'default'] as Region[] // "default",
 let idx = 0
 
 export const JitoTipAmount = 7_500_00
@@ -37,11 +37,11 @@ export class JitoBundleService {
     // constructor(_region: Region) {
     constructor() {
         this.endpoint = endpoints.default
-        console.log('JitoRegion', this.endpoint)
     }
 
     updateRegion() {
-        this.endpoint = endpoints.default
+        this.endpoint = regions[idx] || endpoints.default
+        idx = (idx + 1) % regions.length
     }
     async sendBundle(serializedTransaction: Uint8Array) {
         const encodedTx = bs58.encode(serializedTransaction)

@@ -55,7 +55,10 @@ export class OrderBook {
     processTrade(mint: string, side: Side, price: number, amount: number, origin: string, signature: string, bondingCurve: string, associatedBondingCurve: string): Order | undefined {
         const order = this._getOrder(mint);
         if (!order && side === Side.BUY) {
-            console.log('Order not found, added PENDING ORDER')
+            if (!bondingCurve || !associatedBondingCurve) { return undefined }
+            console.log('============================= NEW PENDING ORDER ====================================')
+            console.log(`https://solscan.io/tx/${signature}`)
+            console.log(`---------------------------------------------`)
             return this._addOrder({
                 mint,
                 amount_bought: amount,
@@ -71,6 +74,7 @@ export class OrderBook {
                 associated_bonding_curve: associatedBondingCurve
             });
         } else if (order && order.status === OrderStatus.PENDING && side === Side.BUY) {
+            console.log('============================= OPEN ORDER ====================================')
             let text = 'Order =>'
             if (side === Side.BUY) {
               text = `[${mint}] BUY => ${amount} => $${price} USD => ${price * amount} TOTAL`
@@ -79,6 +83,7 @@ export class OrderBook {
             }
             console.log(text);
             console.log(`https://solscan.io/tx/${signature}`)
+            console.log(`---------------------------------------------`)
             return this._updateOrder({
                 mint,
                 amount_bought: amount,

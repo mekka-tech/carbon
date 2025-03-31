@@ -38,7 +38,6 @@ const PUMP_USERS: &[&str] = &[
     "JDd3hy3gQn2V982mi1zqhNqUw1GfV2UL6g76STojCJPN",
     "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
     "AJ6MGExeK7FXmeKkKPmALjcdXVStXYokYNv9uVfDRtvo",
-    "CyaE1VxvBrahnPWkqm5VsdCvyS2QmNht2UFrKJHga54o",
     "DNfuF1L62WWyW3pNakVkyGGFzVVhj4Yr52jSmdTyeBHm",
     "BCnqsPEtA1TkgednYEebRpkmwFRJDCjMQcKZMMtEdArc",
     "73LnJ7G9ffBDjEBGgJDdgvLUhD5APLonKrNiHsKDCw5B",
@@ -161,7 +160,7 @@ impl Processor for PumpfunInstructionProcessor {
 
                 let mut order_book = ORDER_BOOK.lock().unwrap();
 
-                match order_book.get_position(OUR_WALLETS[0].as_str(),trade_event.mint.to_string().as_str()) {
+                match order_book.get_position(OUR_WALLETS[0],trade_event.mint.to_string().as_str()) {
                     Some(position) => {
                         // Make sure that position.current_price is not zero to avoid division by zero.
                     if position.current_price != 0.0 {
@@ -172,9 +171,9 @@ impl Processor for PumpfunInstructionProcessor {
                         let total_pnl = diff * position.quantity;
 
                         
-                        if (pct_diff <= 10.0 || pct_diff >= 30.0) {
+                        if (pct_diff <= -50.0 || pct_diff >= 30.0) {
                             let origin = if pct_diff <= 10.0 { "stop_loss".to_string() } else { "take_profit".to_string() };
-                            println!("Possible PNL: ${:.6} ({:.2}%)", total_pnl, pct_diff);
+                            println!("Possible PNL: ${:.6} ({:.2}%) - {}", total_pnl, pct_diff, origin);
                             let mut socket = SOCKET.lock().unwrap();
                             let body = serde_json::to_string(&SwapOrder {
                                 creator: user_str.to_string(),
@@ -190,6 +189,11 @@ impl Processor for PumpfunInstructionProcessor {
                                 signature: signature.to_string(),
                             }).unwrap();
                             socket.socket.send(Message::Text(body.into())).unwrap_or(());
+                        }
+
+                        if (pct_diff <= -90.0) {
+                            let pnl = order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
+                            println!("PNL: {}", pnl.unwrap_or(0.0));
                         }
 
 
@@ -217,7 +221,7 @@ impl Processor for PumpfunInstructionProcessor {
                 if PUMP_USERS.contains(&user_str.as_str()) {
                     if trade_event.is_buy {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
-                    } else {
+                    } else if (user_str != OUR_WALLETS[0]) {
                         let pnl = order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
                         println!("PNL: {}", pnl.unwrap_or(0.0));
                     }

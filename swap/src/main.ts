@@ -54,7 +54,7 @@ const BUY_AMOUNT = 0.1
 const SOL_PRICE = 130
 const GAS_FEE = 0.005
 const SLIPPAGE = 50
-const MEV_FEE = 0.005
+const MEV_FEE = 0.01
 // Handle new connections
 wss.on('connection', (ws: WebSocket) => {
   console.log('Client connected');
@@ -85,14 +85,15 @@ wss.on('connection', (ws: WebSocket) => {
           payer,
           data.mint,
           tokenPriceOnSol,
-          data.bonding_curve,
-          data.associated_bonding_curve,
+          order.bonding_curve,
+          order.associated_bonding_curve,
           6,
           data.is_buy,
           order.amount_bought,
           GAS_FEE,
           SLIPPAGE,
-          MEV_FEE
+          MEV_FEE,
+          orderBook
         )
       }
     } else {
@@ -111,28 +112,30 @@ wss.on('connection', (ws: WebSocket) => {
           payer,
           data.mint,
           tokenPriceOnSol,
-          data.bonding_curve,
-          data.associated_bonding_curve,
+          order.bonding_curve,
+          order.associated_bonding_curve,
           6,
           data.is_buy,
           BUY_AMOUNT,
           GAS_FEE,
           SLIPPAGE,
-          MEV_FEE
+          MEV_FEE,
+          orderBook
         )
       } else if (order && order.status === OrderStatus.CLOSED && previousOrderStatus !== order.status && data.is_buy === false) {
         await pumpFunSwap(
           payer,
           data.mint,
           tokenPriceOnSol,
-          data.bonding_curve,
-          data.associated_bonding_curve,
+          order.bonding_curve,
+          order.associated_bonding_curve,
           6,
           data.is_buy,
           order.amount_bought,
           GAS_FEE,
           SLIPPAGE,
-          MEV_FEE
+          MEV_FEE,
+          orderBook
         )
       }
     }
