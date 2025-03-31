@@ -9,7 +9,6 @@ export enum Side {
 }
 
 export interface Order {
-    creator: string;
     mint: string;
     amount_bought: number;
     amount_sold: number;
@@ -23,42 +22,38 @@ export interface Order {
 }
 
 export class OrderBook {
-    private orders: Map<string, Map<string, Order>> = new Map();
+    private orders: Map<string, Order> = new Map();
     
     constructor() {
         console.log('Order book initialized');
     }
     
     // Get an order by creator and mint
-    _getOrder(mint: string, creator: string): Order | undefined {
-        const creatorOrders = this.orders.get(mint);
-        if (!creatorOrders) return undefined;
-        return creatorOrders.get(creator);
+    _getOrder(mint: string): Order | undefined {
+        return this.orders.get(mint);
     }
     
     // Add or update an order
     _addOrder(order: Order): Order {
         if (!this.orders.has(order.mint)) {
-            this.orders.set(order.mint, new Map());
+            this.orders.set(order.mint, order);
         }
-        this.orders.get(order.mint)!.set(order.creator, order);
         return order;
     }
     
     // Process a trade
-    processTrade(creator: string, mint: string, side: Side, price: number, amount: number, origin: string, signature: string): Order | undefined {
-        const order = this._getOrder(mint, creator);
+    processTrade(mint: string, side: Side, price: number, amount: number, origin: string, signature: string): Order | undefined {
+        const order = this._getOrder(mint);
         if (!order && side === Side.BUY) {
             let text = 'Order =>'
             if (side === Side.BUY) {
-              text = `[${creator}] [${mint}] BUY => ${amount} => $${price} USD => ${price * amount} TOTAL`
+              text = `[${mint}] BUY => ${amount} => $${price} USD => ${price * amount} TOTAL`
             } else {
-              text = `[${creator}] [${mint}] SELL => ${amount} => $${price} USD => ${price * amount} TOTAL`;
+              text = `[${mint}] SELL => ${amount} => $${price} USD => ${price * amount} TOTAL`;
             }
             console.log(text);
             console.log(`https://solscan.io/tx/${signature}`)
             return this._addOrder({
-                creator,
                 mint,
                 amount_bought: amount,
                 amount_sold: 0,
@@ -81,7 +76,7 @@ export class OrderBook {
                 order.pnl = pnl;
                 order.status = OrderStatus.CLOSED;
                 order.origin = origin;
-                console.log(`[${order.creator}] [${order.mint}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%) POSITION CLOSED`)
+                console.log(`==================================\nPOSITION CLOSED\n[${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%)\n==================================`)
                 console.log(`https://solscan.io/tx/${signature}`)
             } else if (origin === 'stop_loss' || origin === 'take_profit') {
                 order.amount_sold += order.amount_bought;
@@ -90,7 +85,7 @@ export class OrderBook {
                 order.pnl = pnl;
                 order.status = OrderStatus.CLOSED;
                 order.origin = origin;
-                console.log(`[${order.creator}] [${order.mint}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%) POSITION CLOSED`)
+                console.log(`==================================\nPOSITION CLOSED\n[${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}] PNL: ${pnl.toFixed(2)} (${pnl_percentage.toFixed(4)}%)\n==================================`)
                 console.log(`https://solscan.io/tx/${signature}`)
             } else {
                 return undefined;
@@ -123,72 +118,5 @@ export class OrderBook {
         return order;
     }
     
-    // Get all orders for a specific creator
-    getOrdersByCreator(creator: string): Order[] {
-        const creatorOrders = this.orders.get(creator);
-        if (!creatorOrders) return [];
-        return Array.from(creatorOrders.values());
-    }
     
-    // Get all orders for a specific mint
-    getOrdersByMint(mint: string): Order[] {
-        const result: Order[] = [];
-        this.orders.forEach(creatorOrders => {
-            const order = creatorOrders.get(mint);
-            if (order) result.push(order);
-        });
-        return result;
-    }
-    
-    // Get a snapshot of the entire order book
-    getOrderBookSnapshot(): { [creator: string]: Order[] } {
-        const snapshot: { [creator: string]: Order[] } = {};
-        this.orders.forEach((creatorOrders, creator) => {
-            snapshot[creator] = Array.from(creatorOrders.values());
-        });
-        return snapshot;
-    }
-    
-    // Calculate total volume for a specific mint
-    calculateMintVolume(mint: string): { buyVolume: number, sellVolume: number } {
-        let buyVolume = 0;
-        let sellVolume = 0;
-        
-        this.orders.forEach(creatorOrders => {
-            const order = creatorOrders.get(mint);
-            if (order) {
-                buyVolume += order.amount_bought * order.price_bought;
-                sellVolume += order.amount_sold * order.price_sold;
-            }
-        });
-        
-        return { buyVolume, sellVolume };
-    }
-    
-    // Get market summary for a specific mint
-    getMarketSummary(mint: string) {
-        const orders = this.getOrdersByMint(mint);
-        const volume = this.calculateMintVolume(mint);
-        
-        let highestBid = 0;
-        let lowestAsk = Number.MAX_VALUE;
-        
-        orders.forEach(order => {
-            if (order.price_bought > highestBid) {
-                highestBid = order.price_bought;
-            }
-            if (order.price_sold < lowestAsk && order.price_sold > 0) {
-                lowestAsk = order.price_sold;
-            }
-        });
-        
-        return {
-            mint,
-            highestBid,
-            lowestAsk: lowestAsk === Number.MAX_VALUE ? 0 : lowestAsk,
-            spread: lowestAsk === Number.MAX_VALUE ? 0 : lowestAsk - highestBid,
-            buyVolume: volume.buyVolume,
-            sellVolume: volume.sellVolume
-        };
-    }
 } 

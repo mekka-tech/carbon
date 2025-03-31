@@ -49,7 +49,6 @@ wss.on('connection', (ws: WebSocket) => {
     
     // Process the trade
     orderBook.processTrade(
-      data.creator,
       data.mint,
       side,
       price,
