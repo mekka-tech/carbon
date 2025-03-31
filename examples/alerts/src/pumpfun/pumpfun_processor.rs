@@ -110,7 +110,7 @@ impl Processor for PumpfunInstructionProcessor {
             PumpfunInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
                 Some(accounts) => {
                     log::info!(
-                        "Sell: signature: {signature}, sell: {sell:?}, accounts: {accounts:#?}"
+                        "Sell: sell: {sell:?}, accounts: {accounts:#?}"
                     );
                 }
                 None => log::error!("Failed to arrange accounts for Sell {}", accounts.len()),

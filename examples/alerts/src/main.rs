@@ -147,7 +147,7 @@ pub async fn main() -> CarbonResult<()> {
     //     },
     // );
 
-    const PUMP_USERS: &[String] = &[
+    let pump_users: &[String] = &[
         "JDd3hy3gQn2V982mi1zqhNqUw1GfV2UL6g76STojCJPN".to_string(),
         "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj".to_string(),
         "AJ6MGExeK7FXmeKkKPmALjcdXVStXYokYNv9uVfDRtvo".to_string(),
@@ -183,7 +183,7 @@ pub async fn main() -> CarbonResult<()> {
             failed: Some(false),
             account_include: vec![PUMPFUN_PROGRAM_ID.to_string().clone()],
             account_exclude: vec![],
-            account_required: PUMP_USERS.to_vec(),
+            account_required: pump_users.to_vec(),
             signature: None,
         },
     );
