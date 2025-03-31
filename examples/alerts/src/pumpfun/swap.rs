@@ -2,7 +2,6 @@ use once_cell::sync::OnceCell;
 use tungstenite::{WebSocket, stream::MaybeTlsStream, Message};
 use std::fmt;
 use serde::{Serialize, Deserialize};
-use std::any::Any;
 use carbon_core::error::{Error, CarbonResult};
 
 // Global OnceCell to hold the initialized publisher, wrapped in a Box.
@@ -20,14 +19,13 @@ pub struct SwapOrder {
 }
 
 pub struct SwapPublisher {
-  socket: WebSocket<MaybeTlsStream<Any>>,
+  socket: WebSocket<MaybeTlsStream>,
 }
 
 impl SwapPublisher {
   /// Asynchronously creates a new publisher instance and stores it globally.
-  pub async fn init(
-      socket: WebSocket<MaybeTlsStream<Any>>,
-  ) -> CarbonResult<()> {
+  pub async fn init() -> CarbonResult<()> {
+    let (mut socket, response) = connect("ws://localhost:3012").expect("Can't connect");
     let publisher = SwapPublisher { socket };
     GLOBAL_SWAP_PUBLISHER.set(Box::new(publisher));
     socket.send(Message::Text("Copy Bot Started".into())).unwrap();
