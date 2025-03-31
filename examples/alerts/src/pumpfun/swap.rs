@@ -30,7 +30,7 @@ impl SwapPublisher {
   pub async fn init() -> CarbonResult<()> {
     let (mut socket, response) = connect("ws://localhost:3012").expect("Can't connect");
     socket.send(Message::Text("Copy Bot Started".into())).unwrap();
-    let publisher = SwapPublisher { socket };
+    let mut publisher = SwapPublisher { socket };
     GLOBAL_SWAP_PUBLISHER.set(Box::new(&mut publisher));
     Ok(())
   }
