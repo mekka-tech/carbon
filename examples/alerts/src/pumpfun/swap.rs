@@ -28,15 +28,15 @@ pub struct SwapPublisher {
 impl SwapPublisher {
   /// Asynchronously creates a new publisher instance and stores it globally.
   pub async fn init() -> CarbonResult<()> {
-    let (mut socket, response) = connect("ws://localhost:3012").expect("Can't connect");
+    let (socket, response) = connect("ws://localhost:3012").expect("Can't connect");
     socket.send(Message::Text("Copy Bot Started".into())).unwrap();
-    let mut publisher = SwapPublisher { socket };
+    let publisher = SwapPublisher { socket };
     GLOBAL_SWAP_PUBLISHER.set(Box::new(publisher));
     Ok(())
   }
 
   async fn _publish_swap_order(
-    self,
+    &self,
     swap_order: SwapOrder,
   ) -> CarbonResult<()> {
     let message = serde_json::to_string(&swap_order).unwrap_or("{}".to_string());
