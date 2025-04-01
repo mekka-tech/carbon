@@ -68,6 +68,9 @@ const OUR_WALLETS: &[&str] = &[
     "744ZryTiFQ1LDySKUikc93M7MT7ZdB3DnFGsrT1gYhNW",
 ];
 
+const VIRTUAL_SOL_RESERVES: u64 = 30000000017;
+const VIRTUAL_TOKEN_RESERVES: u64 = 1073000000000000;
+
 pub struct PumpfunInstructionProcessor;
 
 #[async_trait]
@@ -91,8 +94,8 @@ impl Processor for PumpfunInstructionProcessor {
                 Some(accounts) => {
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
                     if PUMP_USERS.contains(&user_str.as_str()) || OUR_WALLETS.contains(&user_str.as_str()) {
-                        let sol_amount: f64 = buy.max_sol_cost as f64 / 1e9;
-                        let token_amount: f64 = buy.amount as f64 / 1e6;
+                        let sol_amount: f64 = VIRTUAL_SOL_RESERVES as f64 / 1e9;
+                        let token_amount: f64 = VIRTUAL_TOKEN_RESERVES as f64 / 1e6;
                         let mut socket = SOCKET.lock().unwrap();
                         let body = serde_json::to_string(&SwapOrder {
                             creator: user_str.to_string(),
