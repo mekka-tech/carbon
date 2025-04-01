@@ -13,10 +13,20 @@ pub enum Zone {
   MEDIAN,
 }
 
-#[derive(Debug, PartialEq, Clone, Display)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum PositionAction {
   HOLD,
   EXIT,
+}
+
+
+impl Display for PositionAction {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      match self {
+          PositionAction::HOLD => write!(f, "HOLD"),
+          PositionAction::EXIT => write!(f, "EXIT"),
+      }
+  }
 }
 
 #[derive(Debug, PartialEq, Clone)]
