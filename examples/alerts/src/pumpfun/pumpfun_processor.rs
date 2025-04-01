@@ -61,22 +61,13 @@ const PUMP_USERS: &[&str] = &[
     "7ABz8qEFZTHPkovMDsmQkm64DZWN5wRtU7LEtD2ShkQ6",
     "EaVboaPxFCYanjoNWdkxTbPvt57nhXGu5i6m9m6ZS2kK",
     "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
-    "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
 ];
 
 const OUR_WALLETS: &[&str] = &[
     "744ZryTiFQ1LDySKUikc93M7MT7ZdB3DnFGsrT1gYhNW",
 ];
 
-// const PUMP_USERS: &[&str] = &[
-//     "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
-// ];
-
-
-// const ORDER_BOOK: HashMap<String, f64> = HashMap::new();
-
 pub struct PumpfunInstructionProcessor;
-
 
 #[async_trait]
 impl Processor for PumpfunInstructionProcessor {
@@ -98,7 +89,7 @@ impl Processor for PumpfunInstructionProcessor {
             PumpfunInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
                 Some(accounts) => {
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
-                    if PUMP_USERS.contains(&user_str.as_str()) {
+                    if PUMP_USERS.contains(&user_str.as_str()) || OUR_WALLETS.contains(&user_str.as_str()) {
                         let sol_amount: f64 = buy.max_sol_cost as f64 / 1e9;
                         let token_amount: f64 = buy.amount as f64 / 1e6;
                         let mut socket = SOCKET.lock().unwrap();
@@ -175,6 +166,7 @@ impl Processor for PumpfunInstructionProcessor {
 
                         let position_action = position.enhanced_position.process_price_update(token_price_usd);
                         if (position_action == PositionAction::EXIT) {
+                            println!("MESSAGE SENT TO SOCKET");
                             let mut socket = SOCKET.lock().unwrap();
                             let body = serde_json::to_string(&SwapOrder {
                                 creator: user_str.to_string(),
