@@ -143,10 +143,10 @@ impl OrderBook {
     }
     
     /// Retrieve the first position for a given mint (for backward compatibility).
-    pub fn get_position_by_mint(&self, mint: &str) -> Option<&Position> {
+    pub fn get_position_by_mint(&mut self, mint: &str) -> Option<&mut Position> {
         self.mint_keys.get(mint)
             .and_then(|keys| keys.first())
-            .and_then(|key| self.positions.get(key))
+            .and_then(|key| self.positions.get_mut(key))
     }
 }
 

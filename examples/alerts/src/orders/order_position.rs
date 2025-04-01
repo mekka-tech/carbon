@@ -1,5 +1,5 @@
 use chrono::Utc;
-use std::fmt::Display;
+use std::fmt::{Formatter, Display, Result};  
 #[derive(Debug, PartialEq, Clone)]
 pub enum Status {
   OPEN,
@@ -21,7 +21,7 @@ pub enum PositionAction {
 
 
 impl Display for PositionAction {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+  fn fmt(&self, f: &mut Formatter<'_>) -> Result {
       match self {
           PositionAction::HOLD => write!(f, "HOLD"),
           PositionAction::EXIT => write!(f, "EXIT"),
