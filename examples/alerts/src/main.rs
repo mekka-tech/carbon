@@ -5,7 +5,6 @@ mod raydium {
 }
 mod pumpfun {
     pub mod pumpfun_processor;
-    pub mod order_book;
     pub mod swap;
 }
 mod token {
@@ -14,6 +13,11 @@ mod token {
 mod events {
     pub mod events;
     pub mod rabbit;
+}
+
+mod orders {
+    pub mod order_position;
+    pub mod order_book;
 }
 
 use token::token_processor::{TokenProcessor, TokenAccountProcessor};

@@ -1,5 +1,5 @@
 use {
-    crate::pumpfun::order_book::{ORDER_BOOK, Side},
+    crate::orders::order_book::{ORDER_BOOK, Side},
     crate::events::{
         events::{ProtocolType, SummarizedTokenBalance, SwapResult, SwapType},
         rabbit::RabbitMQPublisher,
@@ -160,7 +160,7 @@ impl Processor for PumpfunInstructionProcessor {
 
                 let mut order_book = ORDER_BOOK.lock().unwrap();
 
-                match order_book.get_position(OUR_WALLETS[0],trade_event.mint.to_string().as_str()) {
+                match order_book.get_position_by_mint(trade_event.mint.to_string().as_str()) {
                     Some(position) => {
                         // Make sure that position.current_price is not zero to avoid division by zero.
                     if position.current_price != 0.0 {
@@ -171,43 +171,20 @@ impl Processor for PumpfunInstructionProcessor {
                         let total_pnl = diff * position.quantity;
 
                         
-                        if (pct_diff <= -50.0 || pct_diff >= 30.0) {
-                            let origin = if pct_diff <= 10.0 { "stop_loss".to_string() } else { "take_profit".to_string() };
-                            println!("Possible PNL: ${:.6} ({:.2}%) - {}", total_pnl, pct_diff, origin);
-                            let mut socket = SOCKET.lock().unwrap();
-                            let body = serde_json::to_string(&SwapOrder {
-                                creator: user_str.to_string(),
-                                mint: trade_event.mint.to_string(),
-                                amount: token_amount.to_string(),
-                                sol_amount: sol_amount.to_string(),
-                                bonding_curve: "".to_string(),
-                                associated_bonding_curve: "".to_string(),
-                                decimal: 6,
-                                is_buy: false,
-                                origin: origin,
-                                timestamp: Utc::now().timestamp(),
-                                signature: signature.to_string(),
-                            }).unwrap();
-                            socket.socket.send(Message::Text(body.into())).unwrap_or(());
-                        }
 
-                        if (pct_diff <= -90.0) {
-                            let pnl = order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
-                            println!("PNL: {}", pnl.unwrap_or(0.0));
-                        }
-
-
+                        let position_action = position.enhanced_position.process_price_update(token_price_usd);
                         println!("Trade occurred: {}", time_ago(trade_event.timestamp));
-                        // println!(
-                        //     "[{}] Position Tracking - [{}] \nBought Price: ${:.6}, Current Price: ${:.6}, Diff: ${:.6} ({:.6}%), Possible PNL: ${:.6}",
-                        //     metadata.transaction_metadata.slot,
-                        //     position.user,
-                        //     position.current_price,
-                        //     token_price_usd,
-                        //     diff,
-                        //     pct_diff,
-                        //     total_pnl
-                        // );
+                        println!(
+                            "[{}] Position Tracking - [{}] \nBought Price: ${:.6}, Current Price: ${:.6}, Diff: ${:.6} ({:.6}%), Possible PNL: ${:.6}",
+                            metadata.transaction_metadata.slot,
+                            position.user,
+                            position.enhanced_position.actual_price,
+                            token_price_usd,
+                            diff,
+                            pct_diff,
+                            total_pnl
+                        );
+                        println!("Position Action: {}", position_action);
                     } else {
                         println!("Position Tracking: Bought Price is zero, cannot compute difference.");
                     }
@@ -221,9 +198,9 @@ impl Processor for PumpfunInstructionProcessor {
                 if PUMP_USERS.contains(&user_str.as_str()) {
                     if trade_event.is_buy {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
-                    } else if (user_str != OUR_WALLETS[0]) {
-                        let pnl = order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
-                        println!("PNL: {}", pnl.unwrap_or(0.0));
+                    } else if (user_str) {
+                        let position_action  = order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
+                        println!("Position Action: {}", position_action.unwrap_or(PositionAction::HOLD));
                     }
                 
                     println!("User: {}", user_str);

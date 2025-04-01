@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
-
+use crate::orders::order_position::{EnhancedPosition, PositionAction};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Side {
@@ -16,7 +16,8 @@ pub struct Position {
     pub side: Side,         // Side at which the position was opened.
     pub open_price: f64,    // Average price at open (in USD).
     pub quantity: f64,      // Quantity of tokens held.
-    pub current_price: f64, // Latest market price (for PNL calculations).
+    pub current_price: f64, // Latest market price (for PNL calculations
+    pub enhanced_position: EnhancedPosition,
 }
 
 impl Position {
@@ -57,7 +58,7 @@ impl OrderBook {
         trade_side: Side,
         trade_price: f64,
         trade_quantity: f64,
-    ) -> Option<f64> {
+    ) -> Option<PositionAction> {
         let key = (user.to_string(), mint.to_string());
 
         if let Some(pos) = self.positions.get_mut(&key) {
@@ -69,7 +70,6 @@ impl OrderBook {
                 pos.quantity += trade_quantity;
                 pos.open_price = (total_cost + trade_cost) / pos.quantity;
                 pos.current_price = trade_price;
-                None
             } else {
                 // Opposite side: trade reduces the position.
                 if trade_quantity >= pos.quantity {
@@ -85,7 +85,6 @@ impl OrderBook {
                         }
                     }
                     
-                    Some(realized_pnl)
                 } else {
                     // Partial close.
                     let closed_quantity = trade_quantity;
@@ -95,9 +94,9 @@ impl OrderBook {
                     };
                     pos.quantity -= closed_quantity;
                     pos.current_price = trade_price;
-                    Some(realized_pnl)
                 }
             }
+            return Some(pos.enhanced_position.process_price_update(trade_price));
         } else {
             if trade_side == Side::Buy {
                 // Open a new position.
@@ -108,8 +107,8 @@ impl OrderBook {
                     open_price: trade_price,
                     quantity: trade_quantity,
                     current_price: trade_price,
+                    enhanced_position: EnhancedPosition::new(user.to_string(), mint.to_string(), trade_price),
                 };
-                
                 // Add key to mint_keys
                 self.mint_keys
                     .entry(mint.to_string())
@@ -117,10 +116,10 @@ impl OrderBook {
                     .push(key.clone());
                 
                 self.positions.insert(key, pos);
-                None
+                return Some(PositionAction::HOLD);
             } else {
                 // No position to reduce for a Sell trade.
-                None
+                return None;
             }
         }
     }
