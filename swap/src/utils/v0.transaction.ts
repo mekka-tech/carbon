@@ -10,7 +10,7 @@ import {
 } from '@solana/web3.js'
 import { getSignature } from './get.signature'
 import { wait } from './wait'
-import { connection, private_connection } from '../config'
+import { private_connection } from '../config'
 import { Wallet } from '@coral-xyz/anchor'
 import { JitoBundleService } from '../services/jito.bundle'
 import { genericBlockchainError } from '../pump/utils'
@@ -48,7 +48,7 @@ export async function sendRawTransactionOrBundle(transaction: VersionedTransacti
     return { bundleId, signature }
 }
 
-export async function trySimulateTransaction(transaction: VersionedTransaction) {
+export async function trySimulateTransaction(transaction: VersionedTransaction, is_buy: boolean, mint: string) {
     const { value: simulatedTransactionResponse } = await private_connection.simulateTransaction(transaction, {
         replaceRecentBlockhash: true,
         commitment: 'processed',
@@ -57,7 +57,10 @@ export async function trySimulateTransaction(transaction: VersionedTransaction) 
     const { err, logs } = simulatedTransactionResponse
 
     if (err) {
-        console.error('SIMULATION_TRANSACTION_ERROR', err, logs)
+        console.error('SIMULATION_TRANSACTION_ERROR', {
+            is_buy,
+            mint,
+        }, err, logs)
         
         let humanMessage = 'SWAP_FAILED'
         if (logs?.length) {
@@ -85,7 +88,7 @@ export const getSignatureStatus = async (signature: string) => {
             await wait(1_000)
             retries++
 
-            const tx = await connection.getSignatureStatus(signature, {
+            const tx = await private_connection.getSignatureStatus(signature, {
                 searchTransactionHistory: false,
             })
             if (tx?.value?.err) {

@@ -7,6 +7,7 @@ import { pumpFunSwap } from './pump/swap';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { getKeyPairFromPrivateKey } from './pump/utils';
 import { JitoBundleService } from './services/jito.bundle';
+import { OWNER_ADDRESS, private_connection } from './config';
 // Create a WebSocket server that listens on port 3012
 const wss = new WebSocket.Server({ port: 3012 });
 
@@ -14,13 +15,6 @@ const wss = new WebSocket.Server({ port: 3012 });
 const orderBook = new OrderBook();
 const discordWebhook = new DiscordWebhookService();
 
-
-setInterval(() => {
-  const closedOrders = orderBook.getClosedOrders();
-  if (closedOrders.length > 0) {
-    discordWebhook.sendPnlSummary(closedOrders);
-  }
-}, 60_000);
 
 setInterval(() => {
   JitoBundleService.updateJitoFee()
@@ -55,15 +49,61 @@ enum Origin {
 
 const payer = getKeyPairFromPrivateKey(process.env.PRIVATE_KEY!)
 
-const CREATORS = ['744ZryTiFQ1LDySKUikc93M7MT7ZdB3DnFGsrT1gYhNW']
+const CREATORS = [OWNER_ADDRESS]
+let CURRENT_BALANCE = 0
+let INITIAL_BALANCE = 0
+const updateBalances = async () => {
+  const balance = await private_connection.getBalance(payer.publicKey)
+  let balanceInSol = balance / LAMPORTS_PER_SOL
+  if (INITIAL_BALANCE === 0) {
+    INITIAL_BALANCE = balanceInSol
+  }
+  console.log('===============================================')
+  if (balanceInSol !== CURRENT_BALANCE) {  
+    const diff = balanceInSol - CURRENT_BALANCE
+    console.log(`${diff > 0 ? '+' : ''}${diff} SOL`)
+    CURRENT_BALANCE = balanceInSol
+  }
+  console.log('BALANCE:', CURRENT_BALANCE)
+  console.log('===============================================')
+    
+}
+setInterval(() => {
+  updateBalances().catch((error: any) => {
+    console.error('Failed to update balances:', error);
+  })
+}, 10_000)
+updateBalances().then(() => {
+  discordWebhook.sendPnlSummary(INITIAL_BALANCE, CURRENT_BALANCE, orderBook.getClosedOrders().length);
+}).catch((error: any) => {
+  console.error('Failed to update balances:', error);
+})
 
-const BUY_AMOUNT = 0.1
+
+
+setInterval(() => {
+  discordWebhook.sendPnlSummary(INITIAL_BALANCE, CURRENT_BALANCE, orderBook.getClosedOrders().length);
+}, 60_000);
+
+const BUY_AMOUNT = 0.5
 const SOL_PRICE = 130
 const GAS_FEE = 0.005
-const SLIPPAGE = 50
+const SLIPPAGE = 30
+const MIN_BALANCE = 0
+const MAX_JITO_FEE = 0.01
 
 const EXPIRED_ORDERS: Order[] = []
 setInterval(() => {
+  const notExpiredOrders: Order[] = [] 
+  EXPIRED_ORDERS.forEach((order) => {
+    if (order.status === OrderStatus.CLOSED ) {
+      notExpiredOrders.push(order)
+    }
+  });
+  notExpiredOrders.forEach((order) => {
+    EXPIRED_ORDERS.splice(EXPIRED_ORDERS.indexOf(order), 1)
+  })
+
   const expiredOrders = orderBook.getExpiredOrders()
   if (expiredOrders.length > 0) {
     expiredOrders.forEach((order) => {
@@ -74,12 +114,15 @@ setInterval(() => {
   }
 
   EXPIRED_ORDERS.forEach(async(order) => {
+    console.log('============================= EXPIRED ORDER ====================================')
+    console.log(`${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}`)
+    console.log(`---------------------------------------------`)
     orderBook.processTrade(
       order.mint,
       Side.SELL,
       order.price_bought,
       order.amount_bought,
-      order.origin,
+      "stop_loss",
       'InternalInternalInternal',
       order.bonding_curve,
       order.associated_bonding_curve
@@ -93,7 +136,7 @@ setInterval(() => {
       6,
       false,
       order.amount_bought,
-      GAS_FEE,
+      JitoBundleService.getCurrentJitoFee() * 1.5,
       SLIPPAGE,
       JitoBundleService.getCurrentJitoFee(),
       orderBook
@@ -110,6 +153,9 @@ wss.on('connection', (ws: WebSocket) => {
     const data = JSON.parse(message.toString('utf-8')) as SwapOrder;
     // Process the trade in the order book
     const side = data.is_buy ? Side.BUY : Side.SELL;
+    if (side === Side.BUY && CURRENT_BALANCE < MIN_BALANCE && JitoBundleService.getCurrentJitoFee() > MAX_JITO_FEE) {
+      return
+    }
     const tokenPriceOnSol = parseFloat(data.sol_amount) / parseFloat(data.amount)
     const amount = parseFloat(data.amount);
     
@@ -136,7 +182,7 @@ wss.on('connection', (ws: WebSocket) => {
           6,
           data.is_buy,
           order.amount_bought,
-          GAS_FEE,
+          JitoBundleService.getCurrentJitoFee() * 1.5,
           SLIPPAGE,
           JitoBundleService.getCurrentJitoFee(),
           orderBook
@@ -163,7 +209,7 @@ wss.on('connection', (ws: WebSocket) => {
           6,
           data.is_buy,
           BUY_AMOUNT,
-          GAS_FEE,
+          JitoBundleService.getCurrentJitoFee() * 1.5,
           SLIPPAGE,
           JitoBundleService.getCurrentJitoFee(),
           orderBook
@@ -178,7 +224,7 @@ wss.on('connection', (ws: WebSocket) => {
           6,
           data.is_buy,
           order.amount_bought,
-          GAS_FEE,
+          JitoBundleService.getCurrentJitoFee() * 1.5,
           SLIPPAGE,
           JitoBundleService.getCurrentJitoFee(),
           orderBook

@@ -33,46 +33,50 @@ export class DiscordWebhookService {
    * Send a PNL summary of closed orders to Discord
    * @param orders Array of closed orders to summarize
    */
-  async sendPnlSummary(orders: Order[]): Promise<void> {
-    if (!this.webhookUrl || orders.length === 0) {
+  async sendPnlSummary(initialBalance: number, currentBalance: number, executedOrders: number): Promise<void> {
+    if (!this.webhookUrl) {
       return;
     }
 
     try {
       // Calculate total PNL
-      const totalPnl = orders.reduce((sum, order) => sum + (order.pnl || 0), 0);
+      const totalPnl = currentBalance - initialBalance;
       const totalPnlFormatted = totalPnl.toFixed(4);
       
       // Determine color based on PNL (green for positive, red for negative)
       const color = totalPnl >= 0 ? 0x00FF00 : 0xFF0000;
       
-      // Create fields for each order
-      const fields: EmbedField[] = orders.map(order => {
-        const pnlFormatted = (order.pnl || 0).toFixed(2);
-        const pnlSign = order.pnl >= 0 ? '+' : '';
-        
-        return {
-          name: `Order #${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}`,
-          value: `**Entry:** ${order.price_bought.toFixed(7)}\n**Exit:** ${order.price_sold.toFixed(7)}\n**PNL:** ${pnlSign}${pnlFormatted}`,
-          inline: true
-        };
-      });
-      
       // Create the embed
       const embed: DiscordEmbed = {
-        title: '🔔 PNL Summary - Closed Orders',
+        title: '🔔 PNL Summary',
         description: `**Total PNL: ${totalPnl >= 0 ? '+' : ''}${totalPnlFormatted}**`,
         color: color,
-        fields: fields,
+        fields: [
+          {
+            name: 'Current Balance',
+            value: `${currentBalance.toFixed(4)} SOL`,
+            inline: false
+          },
+          {
+            name: 'Initial Balance',
+            value: `${initialBalance.toFixed(4)} SOL`,
+            inline: false
+          },
+          {
+            name: 'Executed Orders',
+            value: `${executedOrders}`,
+            inline: false
+          }
+        ],
         footer: {
-          text: 'Pump.fun Swap Bot'
+          text: 'SuperSwap Bot'
         },
         timestamp: new Date().toISOString()
       };
       
       // Create the webhook payload
       const payload: WebhookPayload = {
-        username: 'Swap PNL Tracker',
+        username: 'Kortopi',
         embeds: [embed]
       };
       
