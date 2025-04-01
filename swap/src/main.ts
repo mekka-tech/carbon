@@ -85,7 +85,7 @@ setInterval(() => {
   discordWebhook.sendPnlSummary(INITIAL_BALANCE, CURRENT_BALANCE, orderBook.getClosedOrders().length);
 }, 60_000);
 
-const BUY_AMOUNT = 0.5
+const BUY_AMOUNT = 0.1
 const SOL_PRICE = 130
 const GAS_FEE = 0.005
 const SLIPPAGE = 30
