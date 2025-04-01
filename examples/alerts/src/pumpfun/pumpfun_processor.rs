@@ -70,7 +70,7 @@ const OUR_WALLETS: &[&str] = &[
 
 const VIRTUAL_SOL_RESERVES: u64 = 30000000017;
 const VIRTUAL_TOKEN_RESERVES: u64 = 1073000000000000;
-
+let mut counter = 0;
 pub struct PumpfunInstructionProcessor;
 
 #[async_trait]
@@ -92,26 +92,29 @@ impl Processor for PumpfunInstructionProcessor {
         match instruction.data {
             PumpfunInstruction::Create(create) => match Create::arrange_accounts(&accounts) {
                 Some(accounts) => {
+                    if counter > 3 { return Ok(()); }
+
+                    counter += 1;
+                    println!("Create Event: {:#?}", accounts);
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
-                    if PUMP_USERS.contains(&user_str.as_str()) || OUR_WALLETS.contains(&user_str.as_str()) {
-                        let sol_amount: f64 = VIRTUAL_SOL_RESERVES as f64 / 1e9;
-                        let token_amount: f64 = VIRTUAL_TOKEN_RESERVES as f64 / 1e6;
-                        let mut socket = SOCKET.lock().unwrap();
-                        let body = serde_json::to_string(&SwapOrder {
-                            creator: user_str.to_string(),
-                            mint: accounts.mint.to_string(),
-                            amount: token_amount.to_string(),
-                            sol_amount: sol_amount.to_string(),
-                            bonding_curve: accounts.bonding_curve.to_string(),
-                            associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
-                            decimal: 6,
-                            is_buy: true,
-                            origin: "normal".to_string(),
-                            timestamp: Utc::now().timestamp(),
-                            signature: signature.to_string(),
-                        }).unwrap();
-                        socket.socket.send(Message::Text(body.into())).unwrap_or(());
-                    }
+                    let sol_amount: f64 = VIRTUAL_SOL_RESERVES as f64 / 1e9;
+                    let token_amount: f64 = VIRTUAL_TOKEN_RESERVES as f64 / 1e6;
+                    let mut socket = SOCKET.lock().unwrap();
+                    let body = serde_json::to_string(&SwapOrder {
+                        creator: user_str.to_string(),
+                        mint: accounts.mint.to_string(),
+                        amount: token_amount.to_string(),
+                        sol_amount: sol_amount.to_string(),
+                        bonding_curve: accounts.bonding_curve.to_string(),
+                        associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
+                        decimal: 6,
+                        is_buy: true,
+                        origin: "normal".to_string(),
+                        timestamp: Utc::now().timestamp(),
+                        signature: signature.to_string(),
+                    }).unwrap();
+                    socket.socket.send(Message::Text(body.into())).unwrap_or(());
+                
                 }
                 None => log::error!("Failed to arrange accounts for Create {}", accounts.len()),
             },
