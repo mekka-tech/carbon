@@ -37,7 +37,7 @@ export class DiscordWebhookService {
     if (!this.webhookUrl) {
       return;
     }
-
+    return;
     try {
       // Calculate total PNL
       const totalPnl = currentBalance - initialBalance;
