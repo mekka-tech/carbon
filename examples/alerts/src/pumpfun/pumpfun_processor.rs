@@ -37,7 +37,7 @@ fn time_ago(timestamp: i64) -> String {
 const SOL_PRICE: f64 = 131.6;
 // Define the list of valid pump user addresses.
 const PUMP_USERS: &[&str] = &[
-    "JDd3hy3gQn2V982mi1zqhNqUw1GfV2UL6g76STojCJPN",
+    // "JDd3hy3gQn2V982mi1zqhNqUw1GfV2UL6g76STojCJPN",
     // "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
     // "AJ6MGExeK7FXmeKkKPmALjcdXVStXYokYNv9uVfDRtvo",
     // "DNfuF1L62WWyW3pNakVkyGGFzVVhj4Yr52jSmdTyeBHm",
@@ -56,17 +56,17 @@ const PUMP_USERS: &[&str] = &[
     // "F72vY99ihQsYwqEDCfz7igKXA5me6vN2zqVsVUTpw6qL",
     // "215nhcAHjQQGgwpQSJQ7zR26etbjjtVdW74NLzwEgQjP",
     // "GJA1HEbxGnqBhBifH9uQauzXSB53to5rhDrzmKxhSU65",
-    "G3g1CKqKWSVEVURZDNMazDBv7YAhMNTjhJBVRTiKZygk", // Insider
+    // "G3g1CKqKWSVEVURZDNMazDBv7YAhMNTjhJBVRTiKZygk", // Insider
     // "BXNiM7pqt9Ld3b2Hc8iT3mA5bSwoe9CRrtkSUs15SLWN",
     // "7ABz8qEFZTHPkovMDsmQkm64DZWN5wRtU7LEtD2ShkQ6",
     // "EaVboaPxFCYanjoNWdkxTbPvt57nhXGu5i6m9m6ZS2kK",
     // "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
-    "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
-    "744ZryTiFQ1LDySKUikc93M7MT7ZdB3DnFGsrT1gYhNW",
+    // "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
+    "EUhzTYTiwcj6DhbT8j5y57BScQbiamoTMQW87yWuzU9U",
 ];
 
 const OUR_WALLETS: &[&str] = &[
-    "744ZryTiFQ1LDySKUikc93M7MT7ZdB3DnFGsrT1gYhNW",
+    "EUhzTYTiwcj6DhbT8j5y57BScQbiamoTMQW87yWuzU9U",
 ];
 
 // const PUMP_USERS: &[&str] = &[
@@ -121,31 +121,31 @@ impl Processor for PumpfunInstructionProcessor {
                 }
                 None => log::error!("Failed to arrange accounts for Buy {}", accounts.len()),
             },
-            PumpfunInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
-                Some(accounts) => {
-                    let user_str = metadata.transaction_metadata.fee_payer.to_string();
-                    if PUMP_USERS.contains(&user_str.as_str()) {
-                        let sol_amount: f64 = sell.min_sol_output as f64 / 1e9;
-                        let token_amount: f64 = sell.amount as f64 / 1e6;
-                        let mut socket = SOCKET.lock().unwrap();
-                        let body = serde_json::to_string(&SwapOrder {
-                            creator: user_str.to_string(),
-                            mint: accounts.mint.to_string(),
-                            amount: token_amount.to_string(),
-                            sol_amount: sol_amount.to_string(),
-                            bonding_curve: accounts.bonding_curve.to_string(),
-                            associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
-                            decimal: 6,
-                            is_buy: false,
-                            origin: "normal".to_string(),
-                            timestamp: Utc::now().timestamp(),
-                            signature: signature.to_string(),
-                        }).unwrap();
-                        socket.socket.send(Message::Text(body.into())).unwrap_or(());
-                    }
-                }
-                None => log::error!("Failed to arrange accounts for Sell {}", accounts.len()),
-            },
+            // PumpfunInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
+            //     Some(accounts) => {
+            //         let user_str = metadata.transaction_metadata.fee_payer.to_string();
+            //         if PUMP_USERS.contains(&user_str.as_str()) {
+            //             let sol_amount: f64 = sell.min_sol_output as f64 / 1e9;
+            //             let token_amount: f64 = sell.amount as f64 / 1e6;
+            //             let mut socket = SOCKET.lock().unwrap();
+            //             let body = serde_json::to_string(&SwapOrder {
+            //                 creator: user_str.to_string(),
+            //                 mint: accounts.mint.to_string(),
+            //                 amount: token_amount.to_string(),
+            //                 sol_amount: sol_amount.to_string(),
+            //                 bonding_curve: accounts.bonding_curve.to_string(),
+            //                 associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
+            //                 decimal: 6,
+            //                 is_buy: false,
+            //                 origin: "normal".to_string(),
+            //                 timestamp: Utc::now().timestamp(),
+            //                 signature: signature.to_string(),
+            //             }).unwrap();
+            //             socket.socket.send(Message::Text(body.into())).unwrap_or(());
+            //         }
+            //     }
+            //     None => log::error!("Failed to arrange accounts for Sell {}", accounts.len()),
+            // },
             PumpfunInstruction::TradeEvent(trade_event) => {
                 let user_str = trade_event.user.to_string();
                 // Normalize the raw amounts.
@@ -175,15 +175,34 @@ impl Processor for PumpfunInstructionProcessor {
                         
 
                         let position_action = position.enhanced_position.process_price_update(token_price_usd);
-                        println!("Trade occurred: {}", time_ago(trade_event.timestamp));
+                        if (position_action == PositionAction::EXIT) {
+                            let sol_amount: f64 = buy.max_sol_cost as f64 / 1e9;
+                            let token_amount: f64 = buy.amount as f64 / 1e6;
+                            let mut socket = SOCKET.lock().unwrap();
+                            let body = serde_json::to_string(&SwapOrder {
+                                creator: user_str.to_string(),
+                                mint: accounts.mint.to_string(),
+                                amount: token_amount.to_string(),
+                                sol_amount: sol_amount.to_string(),
+                                bonding_curve: accounts.bonding_curve.to_string(),
+                                associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
+                                decimal: 6,
+                                is_buy: true,
+                                origin: "take_profit".to_string(),
+                                timestamp: Utc::now().timestamp(),
+                                signature: signature.to_string(),
+                            }).unwrap();
+                            socket.socket.send(Message::Text(body.into())).unwrap_or(());
+                        }
                         println!(
-                            "[{}] Position Tracking - [{}] \nBought Price: ${:.6}, Current Price: ${:.6}, Diff: ${:.6} ({:.6}%), Possible PNL: ${:.6}",
+                            "=========================\n[{}] Position Tracking - [{}] \n\nEntry${:.6} | Range: ${:.6} | Current: ${:.6}, ({:.6}%)\nAction: {} | PNL: ${:.6}\n================================================",
                             metadata.transaction_metadata.slot,
                             position.user,
+                            position.enhanced_position.entry_price,
                             position.enhanced_position.actual_price,
                             token_price_usd,
-                            diff,
                             pct_diff,
+                            position_action,
                             total_pnl
                         );
                         println!("Position Action: {}", position_action);
@@ -201,8 +220,7 @@ impl Processor for PumpfunInstructionProcessor {
                     if trade_event.is_buy {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
                     } else {
-                        let position_action  = order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
-                        println!("Position Action: {}", position_action.unwrap_or(PositionAction::HOLD));
+                        order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
                     }
                 
                     println!("User: {}", user_str);
