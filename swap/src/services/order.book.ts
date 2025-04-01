@@ -52,7 +52,7 @@ export class OrderBook {
     }
 
     getExpiredOrders(): Order[] {
-        return Array.from(this.orders.values()).filter(order => order.status === OrderStatus.OPEN && Date.now() - order.timestamp_bought > 20_000);
+        return Array.from(this.orders.values()).filter(order => order.status === OrderStatus.OPEN && Date.now() - order.timestamp_bought > 60_000);
     }
     
     // Process a trade
@@ -100,7 +100,7 @@ export class OrderBook {
             const priceDiff = price - order.price_bought;
             const pnl_percentage = (priceDiff / order.price_bought) * 100;
             const pnl = priceDiff * order.amount_bought
-            if (pnl_percentage >= 20 && origin === 'normal') {
+            if (pnl_percentage >= 50 && origin === 'normal') {
                 order.amount_sold += order.amount_bought;
                 order.price_sold = price;
                 order.timestamp_sold = Date.now();

@@ -8,14 +8,14 @@ type Region = 'ams' | 'ger' | 'ny' | 'tokyo' | 'default'
 
 // Region => Endpoint
 export const endpoints = {
-    default: 'https://mainnet.block-engine.jito.wtf',
+    // default: 'https://mainnet.block-engine.jito.wtf',
     ams: 'https://amsterdam.mainnet.block-engine.jito.wtf',
     ger: 'https://frankfurt.mainnet.block-engine.jito.wtf',
     ny: 'https://ny.mainnet.block-engine.jito.wtf',
     tokyo: 'https://tokyo.mainnet.block-engine.jito.wtf',
 }
 
-const regions = ['ams', 'ger', 'ny', 'tokyo', 'default'] as Region[] // "default",
+const regions = ['ams', 'ger', 'ny', 'tokyo'] as Region[] // "default",
 let idx = 0
 
 export const JitoTipAmount = 0.001
@@ -47,17 +47,17 @@ export class JitoBundleService {
 
     // constructor(_region: Region) {
     constructor() {
-        this.endpoint = endpoints.default
+        this.endpoint = endpoints.ny
     }
 
     updateRegion() {
-        this.endpoint = regions[idx] || endpoints.default
+        this.endpoint = regions[idx] || endpoints.ny
         idx = (idx + 1) % regions.length
     }
     async sendBundle(serializedTransaction: Uint8Array) {
         const encodedTx = bs58.encode(serializedTransaction)
-        // const jitoURL = `${this.endpoint}/api/v1/bundles?uuid=${JITO_UUID}`; // ?uuid=${JITO_UUID}
-        const jitoURL = `${this.endpoint}/api/v1/bundles` // ?uuid=${JITO_UUID}
+        const jitoURL = `${this.endpoint}/api/v1/bundles?uuid=${process.env.JITO_AUTH_TOKEN}`; // ?uuid=${JITO_UUID}
+        // const jitoURL = `${this.endpoint}/api/v1/bundles` // ?uuid=${JITO_UUID}
         const payload = {
             jsonrpc: '2.0',
             id: 1,
@@ -90,8 +90,10 @@ export class JitoBundleService {
             const response = await axios.post(jitoURL, payload, {
                 headers: { 'Content-Type': 'application/json' },
             })
+            console.log('JitoTransaction sent region:', this.endpoint)
             return response.data.result
         } catch (error) {
+            this.updateRegion();
             // console.error("Error:", error);
             throw new Error('cannot send!')
         }
@@ -148,9 +150,9 @@ export class JitoBundleService {
                 const emaFee = feeData[0].landed_tips_95th_percentile;
                 
                 // Convert from SOL to lamports (1 SOL = 10^9 lamports)
-                this.currentJitoFee = +emaFee * 1.2
+                this.currentJitoFee = parseFloat(emaFee.toString()) * 1.2
                 
-                console.log(`Updated Jito fee: ${this.currentJitoFee} lamports (${emaFee} SOL)`);
+                console.log(`Updated Jito fee: ${this.currentJitoFee}`);
                 return this.currentJitoFee;
             }
             

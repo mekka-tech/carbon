@@ -33,6 +33,8 @@ import { sendRawTransactionOrBundle, signV0Transaction, trySimulateTransaction }
 import { Wallet } from '@coral-xyz/anchor'
 import { getFeeInstruction, getJitoFeeInstruction } from '../utils/swap.instructions'
 import { OrderBook, OrderStatus } from '../services/order.book'
+import { TokenService } from '../services/token.service'
+import { OWNER_ADDRESS } from '../config'
 
 const alreadySwappedBuy: string[] = []
 const alreadySwappedSell: string[] = []
@@ -146,11 +148,12 @@ export async function pumpFunSwap(
                 ...swapInstructions,
                 // Unwrap WSOL for SOL
                 createCloseAccountInstruction(tokenAccountOut, owner, owner),
+                createCloseAccountInstruction(tokenAccountIn, owner, owner),
             ]
 
         const transaction = await signV0Transaction(instructions, payer as unknown as Wallet, [])
 
-        await trySimulateTransaction(transaction)
+        await trySimulateTransaction(transaction, is_buy, mintStr)
 
         console.time('sendRawTransactionOrBundle')
         const { bundleId, signature } = await sendRawTransactionOrBundle(transaction, is_buy ? mevFee : 0)
@@ -182,7 +185,9 @@ export async function pumpFunSwap(
             const order = orderBook._getOrder(mintStr)
             if (order?.status === OrderStatus.CLOSED)  {
                 alreadySwappedSell.splice(alreadySwappedSell.indexOf(mintStr), 1)
+                const tokenBalance = await TokenService.getTokenBalance(new PublicKey(OWNER_ADDRESS), new PublicKey(mintStr))
                 order.status = OrderStatus.OPEN
+                order.amount_bought = tokenBalance / 10 ** 6;
                 orderBook._updateOrder(order)
             }
         }
