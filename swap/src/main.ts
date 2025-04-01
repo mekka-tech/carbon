@@ -151,6 +151,10 @@ wss.on('connection', (ws: WebSocket) => {
   // Handle messages from clients
   ws.on('message', async (message: Buffer) => {
     const data = JSON.parse(message.toString('utf-8')) as SwapOrder;
+
+    const timeDiff = Date.now() - data.timestamp
+    console.log(`[${data.mint}] TIME_DIFF ${timeDiff}`)
+
     // Process the trade in the order book
     const side = data.is_buy ? Side.BUY : Side.SELL;
     if (side === Side.BUY && CURRENT_BALANCE < MIN_BALANCE && JitoBundleService.getCurrentJitoFee() > MAX_JITO_FEE) {
