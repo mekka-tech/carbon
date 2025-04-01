@@ -62,6 +62,7 @@ impl OrderBook {
         let key = (user.to_string(), mint.to_string());
 
         if let Some(pos) = self.positions.get_mut(&key) {
+            let action = pos.enhanced_position.process_price_update(trade_price);
             // Existing position.
             if pos.side == trade_side {
                 // Same side: increase the position.
@@ -96,7 +97,7 @@ impl OrderBook {
                     pos.current_price = trade_price;
                 }
             }
-            return Some(pos.enhanced_position.process_price_update(trade_price));
+            return Some(action);
         } else {
             if trade_side == Side::Buy {
                 // Open a new position.
