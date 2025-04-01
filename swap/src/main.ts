@@ -136,7 +136,7 @@ setInterval(() => {
       6,
       false,
       order.amount_bought,
-      JitoBundleService.getCurrentJitoFee() * 1.5,
+      GAS_FEE,
       SLIPPAGE,
       JitoBundleService.getCurrentJitoFee(),
       orderBook
@@ -182,7 +182,7 @@ wss.on('connection', (ws: WebSocket) => {
           6,
           data.is_buy,
           order.amount_bought,
-          JitoBundleService.getCurrentJitoFee() * 1.5,
+          GAS_FEE,
           SLIPPAGE,
           JitoBundleService.getCurrentJitoFee(),
           orderBook
@@ -209,7 +209,7 @@ wss.on('connection', (ws: WebSocket) => {
           6,
           data.is_buy,
           BUY_AMOUNT,
-          JitoBundleService.getCurrentJitoFee() * 1.5,
+          GAS_FEE,
           SLIPPAGE,
           JitoBundleService.getCurrentJitoFee(),
           orderBook
@@ -224,7 +224,7 @@ wss.on('connection', (ws: WebSocket) => {
           6,
           data.is_buy,
           order.amount_bought,
-          JitoBundleService.getCurrentJitoFee() * 1.5,
+          GAS_FEE,
           SLIPPAGE,
           JitoBundleService.getCurrentJitoFee(),
           orderBook

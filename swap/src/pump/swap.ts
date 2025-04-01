@@ -74,7 +74,7 @@ export async function pumpFunSwap(
             alreadySwappedSell.push(mintStr)
         }
 
-        const jitoFeeValueWei = is_buy ? BigInt((mevFee * 10 ** 9).toFixed()) : BigInt(0)
+        const jitoFeeValueWei = BigInt(0)// is_buy ? BigInt((mevFee * 10 ** 9).toFixed()) : BigInt(0)
 
         const txBuilder = new Transaction()
 

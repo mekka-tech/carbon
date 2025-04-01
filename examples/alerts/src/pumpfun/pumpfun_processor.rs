@@ -176,18 +176,16 @@ impl Processor for PumpfunInstructionProcessor {
 
                         let position_action = position.enhanced_position.process_price_update(token_price_usd);
                         if (position_action == PositionAction::EXIT) {
-                            let sol_amount: f64 = buy.max_sol_cost as f64 / 1e9;
-                            let token_amount: f64 = buy.amount as f64 / 1e6;
                             let mut socket = SOCKET.lock().unwrap();
                             let body = serde_json::to_string(&SwapOrder {
                                 creator: user_str.to_string(),
-                                mint: accounts.mint.to_string(),
+                                mint: trade_event.mint.to_string(),
                                 amount: token_amount.to_string(),
                                 sol_amount: sol_amount.to_string(),
-                                bonding_curve: accounts.bonding_curve.to_string(),
-                                associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
+                                bonding_curve: "".to_string(),
+                                associated_bonding_curve: "".to_string(),
                                 decimal: 6,
-                                is_buy: true,
+                                is_buy: false,
                                 origin: "take_profit".to_string(),
                                 timestamp: Utc::now().timestamp(),
                                 signature: signature.to_string(),
