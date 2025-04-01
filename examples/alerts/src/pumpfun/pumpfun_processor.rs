@@ -1,5 +1,7 @@
 use {
     crate::orders::order_book::{ORDER_BOOK, Side},
+    crate::orders::order_position::PositionAction,
+    std::fmt::Display,
     crate::events::{
         events::{ProtocolType, SummarizedTokenBalance, SwapResult, SwapType},
         rabbit::RabbitMQPublisher,
