@@ -18,7 +18,7 @@ use {
     core::time,
     serde_json::Result,
     std::collections::HashMap,
-    std::sync::Arc,
+    std::sync::{Arc, Mutex},
     chrono::{DateTime, Utc, TimeZone},
 };
 use carbon_pumpfun_decoder::instructions::create::Create;
@@ -70,7 +70,7 @@ const OUR_WALLETS: &[&str] = &[
 
 const VIRTUAL_SOL_RESERVES: u64 = 30000000017;
 const VIRTUAL_TOKEN_RESERVES: u64 = 1073000000000000;
-let mut counter = 0;
+static COUNTER: Mutex<i32> = Mutex::new(0);
 pub struct PumpfunInstructionProcessor;
 
 #[async_trait]
@@ -92,7 +92,8 @@ impl Processor for PumpfunInstructionProcessor {
         match instruction.data {
             PumpfunInstruction::Create(create) => match Create::arrange_accounts(&accounts) {
                 Some(accounts) => {
-                    if counter > 3 { return Ok(()); }
+                    let mut counter = COUNTER.lock().unwrap();
+                    if *counter > 3 { return Ok(()); }
 
                     counter += 1;
                     println!("Create Event: {:#?}", accounts);
@@ -242,6 +243,8 @@ impl Processor for PumpfunInstructionProcessor {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
                     } else {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
+                        let mut counter = COUNTER.lock().unwrap();    
+                        counter -= 1;
                     }
                 
                     println!("User: {}", user_str);
