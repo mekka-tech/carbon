@@ -180,7 +180,7 @@ pub async fn main() -> CarbonResult<()> {
     let yellowstone_grpc = YellowstoneGrpcGeyserClient::new(
         env::var("GEYSER_URL").unwrap_or_default(),
         env::var("X_TOKEN").ok(),
-        Some(CommitmentLevel::Confirmed),
+        Some(CommitmentLevel::Processed),
         account_filters,
         transaction_filters,
         Arc::new(RwLock::new(HashSet::new())),

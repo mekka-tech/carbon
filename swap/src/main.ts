@@ -87,62 +87,62 @@ setInterval(() => {
 
 const BUY_AMOUNT = 0.1
 const SOL_PRICE = 130
-const GAS_FEE = 0.005
+const GAS_FEE = 0.001
 const SLIPPAGE = 30
 const MIN_BALANCE = 0
-const MAX_JITO_FEE = 0.01
+const MAX_JITO_FEE = 0.001
 
-const EXPIRED_ORDERS: Order[] = []
-setInterval(() => {
-  const notExpiredOrders: Order[] = [] 
-  EXPIRED_ORDERS.forEach((order) => {
-    if (order.status === OrderStatus.CLOSED ) {
-      notExpiredOrders.push(order)
-    }
-  });
-  notExpiredOrders.forEach((order) => {
-    EXPIRED_ORDERS.splice(EXPIRED_ORDERS.indexOf(order), 1)
-  })
+// const EXPIRED_ORDERS: Order[] = []
+// setInterval(() => {
+//   const notExpiredOrders: Order[] = [] 
+//   EXPIRED_ORDERS.forEach((order) => {
+//     if (order.status === OrderStatus.CLOSED ) {
+//       notExpiredOrders.push(order)
+//     }
+//   });
+//   notExpiredOrders.forEach((order) => {
+//     EXPIRED_ORDERS.splice(EXPIRED_ORDERS.indexOf(order), 1)
+//   })
 
-  const expiredOrders = orderBook.getExpiredOrders()
-  if (expiredOrders.length > 0) {
-    expiredOrders.forEach((order) => {
-      if (!EXPIRED_ORDERS.includes(order))  {
-        EXPIRED_ORDERS.push(order)
-      }
-    })
-  }
+//   const expiredOrders = orderBook.getExpiredOrders()
+//   if (expiredOrders.length > 0) {
+//     expiredOrders.forEach((order) => {
+//       if (!EXPIRED_ORDERS.includes(order))  {
+//         EXPIRED_ORDERS.push(order)
+//       }
+//     })
+//   }
 
-  EXPIRED_ORDERS.forEach(async(order) => {
-    console.log('============================= EXPIRED ORDER ====================================')
-    console.log(`${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}`)
-    console.log(`---------------------------------------------`)
-    orderBook.processTrade(
-      order.mint,
-      Side.SELL,
-      order.price_bought,
-      order.amount_bought,
-      "stop_loss",
-      'InternalInternalInternal',
-      order.bonding_curve,
-      order.associated_bonding_curve
-    )
-    await pumpFunSwap(
-      payer,
-      order.mint,
-      order.price_bought,
-      order.bonding_curve,
-      order.associated_bonding_curve,
-      6,
-      false,
-      order.amount_bought,
-      GAS_FEE,
-      SLIPPAGE,
-      JitoBundleService.getCurrentJitoFee(),
-      orderBook
-    )
-  })
-}, 10_000);
+//   EXPIRED_ORDERS.forEach(async(order) => {
+//     console.log('============================= EXPIRED ORDER ====================================')
+//     console.log(`${order.mint.substring(0, 4)}-${order.mint.substring(order.mint.length - 6)}`)
+//     console.log(`---------------------------------------------`)
+//     orderBook.processTrade(
+//       order.mint,
+//       Side.SELL,
+//       order.price_bought,
+//       order.amount_bought,
+//       "stop_loss",
+//       'InternalInternalInternal',
+//       order.bonding_curve,
+//       order.associated_bonding_curve
+//     )
+//     await pumpFunSwap(
+//       payer,
+//       order.mint,
+//       order.price_bought,
+//       order.bonding_curve,
+//       order.associated_bonding_curve,
+//       6,
+//       false,
+//       order.amount_bought,
+//       GAS_FEE,
+//       SLIPPAGE,
+//       MAX_JITO_FEE,
+//       orderBook
+//     )
+//   })
+// }, 10_000);
 
 // Handle new connections
 wss.on('connection', (ws: WebSocket) => {
@@ -184,7 +184,7 @@ wss.on('connection', (ws: WebSocket) => {
           order.amount_bought,
           GAS_FEE,
           SLIPPAGE,
-          JitoBundleService.getCurrentJitoFee(),
+          MAX_JITO_FEE,
           orderBook
         )
       }
@@ -211,7 +211,7 @@ wss.on('connection', (ws: WebSocket) => {
           BUY_AMOUNT,
           GAS_FEE,
           SLIPPAGE,
-          JitoBundleService.getCurrentJitoFee(),
+          MAX_JITO_FEE,
           orderBook
         )
       } else if (order && order.status === OrderStatus.CLOSED && previousOrderStatus !== order.status && data.is_buy === false) {
@@ -226,7 +226,7 @@ wss.on('connection', (ws: WebSocket) => {
           order.amount_bought,
           GAS_FEE,
           SLIPPAGE,
-          JitoBundleService.getCurrentJitoFee(),
+          MAX_JITO_FEE,
           orderBook
         )
       }

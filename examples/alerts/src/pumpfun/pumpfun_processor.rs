@@ -90,60 +90,62 @@ impl Processor for PumpfunInstructionProcessor {
         let accounts = instruction.accounts;
         
         match instruction.data {
-            PumpfunInstruction::Create(create) => match Create::arrange_accounts(&accounts) {
+            // PumpfunInstruction::Create(create) => match Create::arrange_accounts(&accounts) {
+            //     Some(accounts) => {
+            //         let mut counter = COUNTER.lock().unwrap();
+            //         if *counter > 3 { return Ok(()); }
+
+            //         println!("Create Event: {:#?}", accounts);
+            //         let user_str = metadata.transaction_metadata.fee_payer.to_string();
+            //         let sol_amount: f64 = VIRTUAL_SOL_RESERVES as f64 / 1e9;
+            //         let token_amount: f64 = VIRTUAL_TOKEN_RESERVES as f64 / 1e6;
+            //         let mut socket = SOCKET.lock().unwrap();
+            //         let body = serde_json::to_string(&SwapOrder {
+            //             creator: user_str.to_string(),
+            //             mint: accounts.mint.to_string(),
+            //             amount: token_amount.to_string(),
+            //             sol_amount: sol_amount.to_string(),
+            //             bonding_curve: accounts.bonding_curve.to_string(),
+            //             associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
+            //             decimal: 6,
+            //             is_buy: true,
+            //             origin: "normal".to_string(),
+            //             timestamp: Utc::now().timestamp(),
+            //             signature: signature.to_string(),
+            //         }).unwrap();
+            //         socket.socket.send(Message::Text(body.into())).unwrap_or(());
+                
+            //     }
+            //     None => log::error!("Failed to arrange accounts for Create {}", accounts.len()),
+            // },
+            PumpfunInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
                 Some(accounts) => {
                     let mut counter = COUNTER.lock().unwrap();
                     if *counter > 3 { return Ok(()); }
 
-                    counter += 1;
-                    println!("Create Event: {:#?}", accounts);
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
-                    let sol_amount: f64 = VIRTUAL_SOL_RESERVES as f64 / 1e9;
-                    let token_amount: f64 = VIRTUAL_TOKEN_RESERVES as f64 / 1e6;
-                    let mut socket = SOCKET.lock().unwrap();
-                    let body = serde_json::to_string(&SwapOrder {
-                        creator: user_str.to_string(),
-                        mint: accounts.mint.to_string(),
-                        amount: token_amount.to_string(),
-                        sol_amount: sol_amount.to_string(),
-                        bonding_curve: accounts.bonding_curve.to_string(),
-                        associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
-                        decimal: 6,
-                        is_buy: true,
-                        origin: "normal".to_string(),
-                        timestamp: Utc::now().timestamp(),
-                        signature: signature.to_string(),
-                    }).unwrap();
-                    socket.socket.send(Message::Text(body.into())).unwrap_or(());
-                
+                    if PUMP_USERS.contains(&user_str.as_str()) || OUR_WALLETS.contains(&user_str.as_str()) {
+                        let sol_amount: f64 = buy.max_sol_cost as f64 / 1e9;
+                        let token_amount: f64 = buy.amount as f64 / 1e6;
+                        let mut socket = SOCKET.lock().unwrap();
+                        let body = serde_json::to_string(&SwapOrder {
+                            creator: user_str.to_string(),
+                            mint: accounts.mint.to_string(),
+                            amount: token_amount.to_string(),
+                            sol_amount: sol_amount.to_string(),
+                            bonding_curve: accounts.bonding_curve.to_string(),
+                            associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
+                            decimal: 6,
+                            is_buy: true,
+                            origin: "normal".to_string(),
+                            timestamp: Utc::now().timestamp(),
+                            signature: signature.to_string(),
+                        }).unwrap();
+                        socket.socket.send(Message::Text(body.into())).unwrap_or(());
+                    }
                 }
-                None => log::error!("Failed to arrange accounts for Create {}", accounts.len()),
+                None => log::error!("Failed to arrange accounts for Buy {}", accounts.len()),
             },
-            // PumpfunInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
-            //     Some(accounts) => {
-            //         let user_str = metadata.transaction_metadata.fee_payer.to_string();
-            //         if PUMP_USERS.contains(&user_str.as_str()) {
-            //             let sol_amount: f64 = buy.max_sol_cost as f64 / 1e9;
-            //             let token_amount: f64 = buy.amount as f64 / 1e6;
-            //             let mut socket = SOCKET.lock().unwrap();
-            //             let body = serde_json::to_string(&SwapOrder {
-            //                 creator: user_str.to_string(),
-            //                 mint: accounts.mint.to_string(),
-            //                 amount: token_amount.to_string(),
-            //                 sol_amount: sol_amount.to_string(),
-            //                 bonding_curve: accounts.bonding_curve.to_string(),
-            //                 associated_bonding_curve: accounts.associated_bonding_curve.to_string(),
-            //                 decimal: 6,
-            //                 is_buy: true,
-            //                 origin: "normal".to_string(),
-            //                 timestamp: Utc::now().timestamp(),
-            //                 signature: signature.to_string(),
-            //             }).unwrap();
-            //             socket.socket.send(Message::Text(body.into())).unwrap_or(());
-            //         }
-            //     }
-            //     None => log::error!("Failed to arrange accounts for Buy {}", accounts.len()),
-            // },
             // PumpfunInstruction::Sell(sell) => match Sell::arrange_accounts(&accounts) {
             //     Some(accounts) => {
             //         let user_str = metadata.transaction_metadata.fee_payer.to_string();
@@ -239,12 +241,13 @@ impl Processor for PumpfunInstructionProcessor {
                 }
 
                 if OUR_WALLETS.contains(&user_str.as_str()) {
+                    let mut counter = COUNTER.lock().unwrap();  
                     if trade_event.is_buy {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
+                        *counter += 1;
                     } else {
-                        order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
-                        let mut counter = COUNTER.lock().unwrap();    
-                        counter -= 1;
+                        order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);  
+                        *counter -= 1;
                     }
                 
                     println!("User: {}", user_str);
