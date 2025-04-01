@@ -198,7 +198,7 @@ impl Processor for PumpfunInstructionProcessor {
                 if PUMP_USERS.contains(&user_str.as_str()) {
                     if trade_event.is_buy {
                         order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Buy, token_price_usd, token_amount);
-                    } else if (user_str) {
+                    } else {
                         let position_action  = order_book.process_trade(user_str.as_str(), trade_event.mint.to_string().as_str(), Side::Sell, token_price_usd, token_amount);
                         println!("Position Action: {}", position_action.unwrap_or(PositionAction::HOLD));
                     }

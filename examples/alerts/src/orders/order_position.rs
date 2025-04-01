@@ -1,5 +1,5 @@
 use chrono::Utc;
-
+use std::fmt::Display;
 #[derive(Debug, PartialEq, Clone)]
 pub enum Status {
   OPEN,
@@ -13,7 +13,7 @@ pub enum Zone {
   MEDIAN,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Display)]
 pub enum PositionAction {
   HOLD,
   EXIT,
