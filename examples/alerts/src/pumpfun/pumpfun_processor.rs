@@ -149,8 +149,8 @@ impl Processor for PumpfunInstructionProcessor {
 
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
                     if (
-                        PUMP_USERS.contains(&user_str.as_str())
-                        || AXIOM_WALLETS.contains(&user_str.as_str()) 
+                        // PUMP_USERS.contains(&user_str.as_str())
+                        AXIOM_WALLETS.contains(&user_str.as_str()) 
                         || OUR_WALLETS.contains(&user_str.as_str())
                     ) {
                         let sol_amount: f64 = buy.max_sol_cost as f64 / 1e9;
