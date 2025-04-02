@@ -74,7 +74,7 @@ export async function pumpFunSwap(
             alreadySwappedSell.push(mintStr)
         }
 
-        const jitoFeeValueWei = is_buy ? BigInt((mevFee * 10 ** 9).toFixed()) : BigInt(0)
+        const jitoFeeValueWei = BigInt((mevFee * 10 ** 9).toFixed())// is_buy ? BigInt((mevFee * 10 ** 9).toFixed()) : BigInt(0)
 
         const txBuilder = new Transaction()
 
@@ -144,6 +144,7 @@ export async function pumpFunSwap(
                 createCloseAccountInstruction(tokenAccountIn, owner, owner),            ]
             : [
                 ...feeInstruction,
+                ...jitoFeeInstruction,
                 createAssociatedTokenAccountIdempotentInstruction(owner, tokenAccountOut, owner, NATIVE_MINT),
                 ...swapInstructions,
                 // Unwrap WSOL for SOL
@@ -156,7 +157,7 @@ export async function pumpFunSwap(
         await trySimulateTransaction(transaction, is_buy, mintStr)
 
         console.time('sendRawTransactionOrBundle')
-        const { bundleId, signature } = await sendRawTransactionOrBundle(transaction, is_buy ? mevFee : 0)
+        const { bundleId, signature } = await sendRawTransactionOrBundle(transaction, mevFee)
         console.timeEnd('sendRawTransactionOrBundle')
 
         const quote = { inAmount: amountWithDecimals, outAmount: quoteAmount }
