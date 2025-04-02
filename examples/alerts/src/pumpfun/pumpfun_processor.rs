@@ -62,6 +62,30 @@ const PUMP_USERS: &[&str] = &[
     "7ABz8qEFZTHPkovMDsmQkm64DZWN5wRtU7LEtD2ShkQ6",
     "EaVboaPxFCYanjoNWdkxTbPvt57nhXGu5i6m9m6ZS2kK",
     "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
+    
+];
+
+const AXIOM_WALLETS: &[&str] = &[
+    "BXNiM7pqt9Ld3b2Hc8iT3mA5bSwoe9CRrtkSUs15SLWN",
+    "FRbUNvGxYNC1eFngpn7AD3f14aKKTJVC6zSMtvj2dyCS",
+    "719sfKUjiMThumTt2u39VMGn612BZyCcwbM5Pe8SqFYz",
+    "6Rfz9C1DSZd8mpDgptYi4y3iq4GsZRH1uV7CeBu7qkrL",
+    "GDF6ocfnuan48G21sgSRWMWDEzTfGQcMyKU5UWy3ga84",
+    "4BdKaxN8G6ka4GYtQQWk4G4dZRUTX2vQH9GcXdBREFUk",
+    "ARQvZuk15nmF7qZHLresn7r3awqSpQTTRDpnJLzJZCap",
+    "13E1Ut5Tu4AzLeazjgEWyfU44QXP7jkfya5qRfxdUx48",
+    "22kFm8b2Vb7itdz51dNGd1tn9hkKgF82sc2jNEQkGafp",
+    "28ipXVfkdmu1PDowCHbcSfzkpH9edZmSiVoDhY5xGVfR",
+    "2F19ZXrvQDCoYXdBoFBiBcEmgrAKYAheZHnQxZksHQhN",
+    "2HWT2KLLdN2wxYTqdSuko5SBzg2SEJASgV4GE2tD7TML",
+    "2JUsjGsrU9aKKWRFGxSKNV61HXbPZakM5JJYufwFaWhm",
+    "2kv8X2a9bxnBM8NKLc6BBTX2z13GFNRL4oRotMUJRva9",
+    "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
+    "3h65MmPZksoKKyEpEjnWU2Yk2iYT5oZDNitGy5cTaxoE",
+    "3jN1M8gWLk2ryTGnscrcwRK1Gy4Ttzq5QizWT8uizZsT",
+    "3NzdGknBeQivGUoDzHhaHxLEDN7tNWUyKj5xkqyb4mui",
+    "3ubt1SkopkPkL8raULj9sXMgnhh52LQZQRX7AzuFd8ux",
+    "3uswT1DpBfrpkyJzwZndLV5ZuytAsUvr8dXjYx3pWccq",
 ];
 
 const OUR_WALLETS: &[&str] = &[
@@ -124,7 +148,11 @@ impl Processor for PumpfunInstructionProcessor {
                     if *counter > 3 { return Ok(()); }
 
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
-                    if PUMP_USERS.contains(&user_str.as_str()) || OUR_WALLETS.contains(&user_str.as_str()) {
+                    if (
+                        PUMP_USERS.contains(&user_str.as_str())
+                        || AXIOM_WALLETS.contains(&user_str.as_str()) 
+                        || OUR_WALLETS.contains(&user_str.as_str())
+                    ) {
                         let sol_amount: f64 = buy.max_sol_cost as f64 / 1e9;
                         let token_amount: f64 = buy.amount as f64 / 1e6;
                         let mut socket = SOCKET.lock().unwrap();

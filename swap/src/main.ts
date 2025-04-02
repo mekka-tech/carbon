@@ -89,7 +89,7 @@ const BUY_AMOUNT = 0.1
 const SOL_PRICE = 130
 const GAS_FEE = 0.001
 const SLIPPAGE = 30
-const MIN_BALANCE = 0
+const MIN_BALANCE = 0.1
 const MAX_JITO_FEE = 0.001
 
 // const EXPIRED_ORDERS: Order[] = []
@@ -157,7 +157,7 @@ wss.on('connection', (ws: WebSocket) => {
 
     // Process the trade in the order book
     const side = data.is_buy ? Side.BUY : Side.SELL;
-    if (side === Side.BUY && CURRENT_BALANCE < MIN_BALANCE && JitoBundleService.getCurrentJitoFee() > MAX_JITO_FEE) {
+    if (side === Side.BUY && CURRENT_BALANCE < MIN_BALANCE) {
       return
     }
     const tokenPriceOnSol = parseFloat(data.sol_amount) / parseFloat(data.amount)
