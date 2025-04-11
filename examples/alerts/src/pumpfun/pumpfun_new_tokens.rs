@@ -83,8 +83,6 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
         DecodedInstruction<PumpfunInstruction>,
         Vec<NestedInstruction>,
     );
-    30000000000
-    39004700420
 
     async fn process(
         &mut self,
