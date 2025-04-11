@@ -95,11 +95,10 @@ setInterval(() => {
   discordWebhook.sendPnlSummary(INITIAL_BALANCE, CURRENT_BALANCE, orderBook.getClosedOrders().length);
 }, 600_000);
 
-const BUY_AMOUNT = 0.1
-const SOL_PRICE = 130
-const GAS_FEE = 0.001
-const SLIPPAGE = 30
-const MAX_JITO_FEE = 0.001
+const BUY_AMOUNT = parseFloat(process.env.BUY_AMOUNT || '0.1')
+const GAS_FEE = parseFloat(process.env.GAS_FEE || '0.001')
+const SLIPPAGE = parseFloat(process.env.SLIPPAGE || '30')
+const MAX_JITO_FEE = parseFloat(process.env.MAX_JITO_FEE || '0.001')
 
 // const EXPIRED_ORDERS: Order[] = []
 // setInterval(() => {
@@ -173,6 +172,7 @@ wss.on('connection', (ws: WebSocket) => {
     const amount = parseFloat(data.amount);
     const isMe = CREATORS.includes(data.creator)
     const closeAccount = true
+    const decimals = data.decimal ?? 6
     
     const previousOrderStatus = orderBook.getOrderStatus(data.mint)
 
@@ -195,7 +195,7 @@ wss.on('connection', (ws: WebSocket) => {
           tokenPriceOnSol,
           order.bonding_curve,
           order.associated_bonding_curve,
-          6,
+          decimals,
           data.is_buy,
           order.amount_bought,
           GAS_FEE,
@@ -223,7 +223,7 @@ wss.on('connection', (ws: WebSocket) => {
           tokenPriceOnSol,
           order.bonding_curve,
           order.associated_bonding_curve,
-          6,
+          decimals,
           data.is_buy,
           BUY_AMOUNT,
           GAS_FEE,
@@ -239,7 +239,7 @@ wss.on('connection', (ws: WebSocket) => {
           tokenPriceOnSol,
           order.bonding_curve,
           order.associated_bonding_curve,
-          6,
+          decimals,
           data.is_buy,
           order.amount_bought,
           GAS_FEE,

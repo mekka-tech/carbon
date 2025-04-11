@@ -1,8 +1,9 @@
 import bs58 from 'bs58'
 import axios from 'axios'
 import { wait } from '../utils/wait'
+import 'dotenv/config';
 
-const MAX_CHECK_JITO = 20
+const MAX_CHECK_JITO = parseFloat(process.env.MAX_CHECK_JITO || '20')
 
 type Region = 'ams' | 'ger' | 'ny' | 'tokyo' | 'default'
 
@@ -18,7 +19,7 @@ export const endpoints = {
 const regions = ['ams', 'ger', 'ny', 'tokyo'] as Region[] // "default",
 let idx = 0
 
-export const JitoTipAmount = 0.001
+export const JitoTipAmount = parseFloat(process.env.JITO_TIP_AMOUNT || '0.0001')
 
 export const tipAccounts = [
     '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
@@ -144,7 +145,7 @@ export class JitoBundleService {
                 const emaFee = feeData[0].landed_tips_95th_percentile;
                 
                 // Convert from SOL to lamports (1 SOL = 10^9 lamports)
-                this.currentJitoFee = parseFloat(emaFee.toString()) * 1.2
+                this.currentJitoFee = +(parseFloat(emaFee.toString()) * 1.2).toPrecision(6)
                 
                 console.log(`Updated Jito fee: ${this.currentJitoFee}`);
                 return this.currentJitoFee;
