@@ -105,13 +105,21 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
                         return Ok(());
                     }
                     let diff_balance = pre_balance - post_balance;
+
+
             
                     if pre_balance < *MIN_CREATOR_BALANCE * 1e9 as u64 && diff_balance > *MAX_CREATOR_BUY * 1e9 as u64 {
                         return Ok(());
                     }
                     let mut counter = COUNTER.lock().unwrap();
                     if *counter > *MAX_TOKEN_BUY { return Ok(()); }
-
+                    
+                    println!("Pre Balance: {}", pre_balance);
+                    println!("Post Balance: {}", post_balance);
+                    println!("Diff Balance: {}", diff_balance);
+                    println!("Min Creator Balance: {}", *MIN_CREATOR_BALANCE * 1e9 as u64);
+                    println!("Max Creator Buy: {}", *MAX_CREATOR_BUY * 1e9 as u64);
+                    
                     println!("Create Event: {:#?}", accounts);
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
                     let sol_amount: f64 = VIRTUAL_SOL_RESERVES as f64 / 1e9;
