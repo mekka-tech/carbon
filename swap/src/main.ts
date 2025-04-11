@@ -165,7 +165,9 @@ wss.on('connection', (ws: WebSocket) => {
   ws.on('message', async (message: Buffer) => {
     const data = JSON.parse(message.toString('utf-8')) as SwapOrder;
 
-    const timeDiff = Date.now() - data.timestamp
+    const now = new Date().getTime()
+    const timeDiff = now - data.timestamp
+    console.log(now, data.timestamp, timeDiff)
     console.log(`[${data.mint}] TIME_DIFF ${timeDiff}`)
 
     // Process the trade in the order book
