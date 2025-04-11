@@ -104,6 +104,7 @@ const BUY_AMOUNT = parseFloat(process.env.BUY_AMOUNT || '0.1')
 const GAS_FEE = parseFloat(process.env.GAS_FEE || '0.001')
 const SLIPPAGE = parseFloat(process.env.SLIPPAGE || '30')
 const MAX_JITO_FEE = parseFloat(process.env.MAX_JITO_FEE || '0.001')
+const TIME_DIFF_PERMITTED = parseFloat(process.env.TIME_DIFF_PERMITTED || '3')
 
 // const EXPIRED_ORDERS: Order[] = []
 // setInterval(() => {
@@ -170,6 +171,11 @@ wss.on('connection', (ws: WebSocket) => {
     const timeDiff = now - data.timestamp
     console.log(now, data.timestamp, timeDiff)
     console.log(`[${data.mint}] TIME_DIFF ${timeDiff}`)
+
+    if (timeDiff > TIME_DIFF_PERMITTED) {
+      console.log(`SKIPPING ORDER BECAUSE OF TIME DIFF`)
+      return
+    }
 
     // Process the trade in the order book
     const side = data.is_buy ? Side.BUY : Side.SELL;
