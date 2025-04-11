@@ -40,7 +40,8 @@ import { buyWithJupiter, sellWithJupiter } from '../services/jupiter.swap'
 const alreadySwappedBuy: string[] = []
 const alreadySwappedSell: string[] = []
 
-const DISABLE_SIMULATE = process.env.DISABLE_SIMULATE === 'true'
+const DISABLE_SIMULATE_TX = process.env.DISABLE_SIMULATE_TX === 'true'
+const RETRY_TX_ON_ERROR = process.env.RETRY_TX_ON_ERROR === 'true'
 
 export async function pumpFunSwap(
     payer: Keypair,
@@ -155,7 +156,7 @@ export async function pumpFunSwap(
 
         const transaction = await signV0Transaction(instructions, payer as unknown as Wallet, [])
 
-        if (!DISABLE_SIMULATE) {
+        if (!DISABLE_SIMULATE_TX) {
             await trySimulateTransaction(transaction, is_buy, mintStr)
         }
 
@@ -202,21 +203,33 @@ export async function pumpFunSwap(
             }
         } else {
 
-            pumpFunSwap(
-                payer,
-                mintStr,
-                price,
-                bondingCurve,
-                associatedBondingCurve,
-                decimal,
-                is_buy,
-                _amount,
-                gasFee,
-                _slippage,
-                mevFee,
-                closeAccount,
-                orderBook
-            )
+            if (RETRY_TX_ON_ERROR) {
+                return pumpFunSwap(
+                    payer,
+                    mintStr,
+                    price,
+                    bondingCurve,
+                    associatedBondingCurve,
+                    decimal,
+                    is_buy,
+                    _amount,
+                    gasFee,
+                    _slippage,
+                    mevFee,
+                    closeAccount,
+                    orderBook
+                )
+            } else {
+                console.log('BUY Swap pump token failed', error)
+                return {
+                    success: false,
+                    error: (error as Error)?.message?.toString(),
+                    txHash: '',
+                    tokenAddress: mintStr,
+                    bundleId: '',
+                    quote: { inAmount: _amount, outAmount: 0 },
+                }
+            }
 
             // try {
             //     const txId = await buyWithJupiter(payer, mintStr, _amount, _slippage)
