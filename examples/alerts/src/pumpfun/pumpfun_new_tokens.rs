@@ -88,6 +88,7 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
                     let sol_amount: f64 = VIRTUAL_SOL_RESERVES as f64 / 1e9;
                     let token_amount: f64 = VIRTUAL_TOKEN_RESERVES as f64 / 1e6;
+                    let timestamp = metadata.transaction_metadata.block_time.unwrap_or(Utc::now().timestamp() * 1001);
                     let mut socket = SOCKET.lock().unwrap();
                     let body = serde_json::to_string(&SwapOrder {
                         creator: user_str.to_string(),
@@ -99,7 +100,7 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
                         decimals: 6,
                         is_buy: true,
                         origin: "normal".to_string(),
-                        timestamp: Utc::now().timestamp(),
+                        timestamp: timestamp,
                         signature: signature.to_string(),
                     }).unwrap();
                     socket.socket.send(Message::Text(body.into())).unwrap_or(());
@@ -157,7 +158,7 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
                                 decimals: 6,
                                 is_buy: false,
                                 origin: "take_profit".to_string(),
-                                timestamp: Utc::now().timestamp(),
+                                timestamp: metadata.transaction_metadata.block_time.unwrap_or(Utc::now().timestamp_millis()),
                                 signature: signature.to_string(),
                             }).unwrap();
                             socket.socket.send(Message::Text(body.into())).unwrap_or(());
