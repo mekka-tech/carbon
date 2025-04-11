@@ -32,7 +32,7 @@ interface SwapOrder {
   sol_amount: string;
   bonding_curve: string;
   associated_bonding_curve: string;
-  decimal: number;
+  decimals: number;
   is_buy: boolean;
   origin: string;
   timestamp: number;
@@ -177,9 +177,14 @@ wss.on('connection', (ws: WebSocket) => {
     const amount = parseFloat(data.amount);
     const isMe = CREATORS.includes(data.creator)
     const closeAccount = true
-    const decimals = data.decimal ?? 6
+    const decimals = data.decimals ?? 6
     
     const previousOrderStatus = orderBook.getOrderStatus(data.mint)
+
+    if (SWAP_SIMULATE) {
+      console.log('SIMULATE ORDER:', data)
+      return
+    }
 
     if (CREATORS.includes(data.creator)) {
       // Process my trade
@@ -193,11 +198,6 @@ wss.on('connection', (ws: WebSocket) => {
         data.bonding_curve,
         data.associated_bonding_curve
       );
-
-      if (SWAP_SIMULATE) {
-        console.log('SIMULATE ORDER:', order)
-        return
-      }
 
       if (order && order.status === OrderStatus.CLOSED && previousOrderStatus !== order.status) {
         await pumpFunSwap(
