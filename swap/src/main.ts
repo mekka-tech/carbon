@@ -103,8 +103,11 @@ const SWAP_SIMULATE = process.env.SWAP_SIMULATE === 'true'
 const BUY_AMOUNT = parseFloat(process.env.BUY_AMOUNT || '0.1')
 const GAS_FEE = parseFloat(process.env.GAS_FEE || '0.001')
 const SLIPPAGE = parseFloat(process.env.SLIPPAGE || '30')
-const MAX_JITO_FEE = parseFloat(process.env.MAX_JITO_FEE || '0.001')
+const JITO_TIP_AMOUNT = parseFloat(process.env.JITO_TIP_AMOUNT ?? '0.0001')
+const MAX_JITO_FEE = Math.min(JITO_TIP_AMOUNT, parseFloat(process.env.MAX_JITO_FEE || '0.001'))
 const TIME_DIFF_PERMITTED = parseFloat(process.env.TIME_DIFF_PERMITTED || '3')
+
+console.log({SWAP_SIMULATE, BUY_AMOUNT, GAS_FEE, SLIPPAGE, JITO_TIP_AMOUNT, MAX_JITO_FEE, TIME_DIFF_PERMITTED})
 
 // const EXPIRED_ORDERS: Order[] = []
 // setInterval(() => {
