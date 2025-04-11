@@ -99,6 +99,7 @@ setInterval(() => {
   discordWebhook.sendPnlSummary(INITIAL_BALANCE, CURRENT_BALANCE, orderBook.getClosedOrders().length);
 }, 600_000);
 
+const SWAP_SIMULATE = process.env.SWAP_SIMULATE === 'true'
 const BUY_AMOUNT = parseFloat(process.env.BUY_AMOUNT || '0.1')
 const GAS_FEE = parseFloat(process.env.GAS_FEE || '0.001')
 const SLIPPAGE = parseFloat(process.env.SLIPPAGE || '30')
@@ -192,6 +193,12 @@ wss.on('connection', (ws: WebSocket) => {
         data.bonding_curve,
         data.associated_bonding_curve
       );
+
+      if (SWAP_SIMULATE) {
+        console.log('SIMULATE ORDER:', order)
+        return
+      }
+
       if (order && order.status === OrderStatus.CLOSED && previousOrderStatus !== order.status) {
         await pumpFunSwap(
           payer,
