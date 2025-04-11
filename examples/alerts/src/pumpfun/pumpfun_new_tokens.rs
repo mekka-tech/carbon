@@ -54,6 +54,20 @@ lazy_static! {
             .parse::<i32>()
             .unwrap_or(1)
     };
+    static ref MIN_CREATOR_BALANCE: u64 = {
+        dotenv().ok();
+        env::var("MIN_CREATOR_BALANCE")
+            .unwrap_or_else(|_| "1".to_string())
+            .parse::<u64>()
+            .unwrap_or(1)
+    };
+    static ref MAX_CREATOR_BUY: u64 = {
+        dotenv().ok();
+        env::var("MAX_CREATOR_BUY")
+            .unwrap_or_else(|_| "1".to_string())
+            .parse::<u64>()
+            .unwrap_or(1)
+    };
 }
 
 const VIRTUAL_SOL_RESERVES: u64 = 30000000017;
@@ -80,9 +94,13 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
         
         let pre_balance = metadata.transaction_metadata.meta.pre_balances[0];
         let post_balance = metadata.transaction_metadata.meta.post_balances[0];
+        let diff_balance = pre_balance - post_balance;
 
-        println!("Pre Balance: {}", pre_balance);
-        println!("Post Balance: {}", post_balance);
+        if pre_balance < *MIN_CREATOR_BALANCE * 1e9 as u64 && diff_balance > *MAX_CREATOR_BUY * 1e9 as u64 {
+            return Ok(());
+        }
+        // println!("Pre Balance: {}", pre_balance);
+        // println!("Post Balance: {}", post_balance);
 
         match instruction.data {
             PumpfunInstruction::Create(create) => match Create::arrange_accounts(&accounts) {
