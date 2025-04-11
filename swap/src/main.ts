@@ -25,7 +25,6 @@ JitoBundleService.updateJitoFee().catch((error: any) => {
 
 console.log('WebSocket server started on port 3012');
 
-
 interface SwapOrder {
   creator: string;
   mint: string;
@@ -39,6 +38,7 @@ interface SwapOrder {
   timestamp: number;
   signature: string;
 }
+
 enum Origin {
   STOP_LOSS = 'stop_loss',
   TAKE_PROFIT = 'take_profit',
@@ -46,27 +46,37 @@ enum Origin {
   UPDATE = 'update',
 }
 
-
 const payer = getKeyPairFromPrivateKey(process.env.PRIVATE_KEY!)
 
 const CREATORS = [OWNER_ADDRESS]
 let CURRENT_BALANCE = 0
 let INITIAL_BALANCE = 0
+let MIN_BALANCE = 2
+let PROFIT_LOCK_PERCENTAGE = 0.8 // % of profits get locked
 const updateBalances = async () => {
   const balance = await private_connection.getBalance(payer.publicKey)
   let balanceInSol = balance / LAMPORTS_PER_SOL
   if (INITIAL_BALANCE === 0) {
     INITIAL_BALANCE = balanceInSol
+    MIN_BALANCE = INITIAL_BALANCE - 1;
   }
   console.log('===============================================')
   if (balanceInSol !== CURRENT_BALANCE) {  
     const diff = balanceInSol - CURRENT_BALANCE
     console.log(`${diff > 0 ? '+' : ''}${diff} SOL`)
     CURRENT_BALANCE = balanceInSol
+    
+    // Update MIN_BALANCE if we have profits
+    if (CURRENT_BALANCE > INITIAL_BALANCE) {
+      const totalProfit = CURRENT_BALANCE - INITIAL_BALANCE
+      const profitToLock = totalProfit * PROFIT_LOCK_PERCENTAGE
+      MIN_BALANCE = 2 + profitToLock
+      console.log(`MIN_BALANCE updated to: ${MIN_BALANCE.toFixed(4)} SOL`)
+    }
   }
   console.log('BALANCE:', CURRENT_BALANCE)
+  console.log('MIN_BALANCE:', MIN_BALANCE.toFixed(4))
   console.log('===============================================')
-    
 }
 setInterval(() => {
   updateBalances().catch((error: any) => {
@@ -74,7 +84,7 @@ setInterval(() => {
   })
 }, 10_000)
 updateBalances().then(() => {
-  discordWebhook.sendPnlSummary(INITIAL_BALANCE, CURRENT_BALANCE, orderBook.getClosedOrders().length);
+  // discordWebhook.sendPnlSummary(INITIAL_BALANCE, CURRENT_BALANCE, orderBook.getClosedOrders().length);
 }).catch((error: any) => {
   console.error('Failed to update balances:', error);
 })
@@ -83,13 +93,12 @@ updateBalances().then(() => {
 
 setInterval(() => {
   discordWebhook.sendPnlSummary(INITIAL_BALANCE, CURRENT_BALANCE, orderBook.getClosedOrders().length);
-}, 60_000);
+}, 600_000);
 
 const BUY_AMOUNT = 0.1
 const SOL_PRICE = 130
 const GAS_FEE = 0.001
 const SLIPPAGE = 30
-const MIN_BALANCE = 0.1
 const MAX_JITO_FEE = 0.001
 
 // const EXPIRED_ORDERS: Order[] = []
@@ -162,8 +171,11 @@ wss.on('connection', (ws: WebSocket) => {
     }
     const tokenPriceOnSol = parseFloat(data.sol_amount) / parseFloat(data.amount)
     const amount = parseFloat(data.amount);
+    const isMe = CREATORS.includes(data.creator)
+    const closeAccount = true
     
     const previousOrderStatus = orderBook.getOrderStatus(data.mint)
+
     if (CREATORS.includes(data.creator)) {
       // Process my trade
       const order = orderBook.processTrade(
@@ -189,6 +201,7 @@ wss.on('connection', (ws: WebSocket) => {
           GAS_FEE,
           SLIPPAGE,
           MAX_JITO_FEE,
+          closeAccount,
           orderBook
         )
       }
@@ -216,6 +229,7 @@ wss.on('connection', (ws: WebSocket) => {
           GAS_FEE,
           SLIPPAGE,
           MAX_JITO_FEE,
+          closeAccount,
           orderBook
         )
       } else if (order && order.status === OrderStatus.CLOSED && previousOrderStatus !== order.status && data.is_buy === false) {
@@ -231,6 +245,7 @@ wss.on('connection', (ws: WebSocket) => {
           GAS_FEE,
           SLIPPAGE,
           MAX_JITO_FEE,
+          closeAccount,
           orderBook
         )
       }

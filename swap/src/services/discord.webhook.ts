@@ -27,7 +27,7 @@ interface WebhookPayload {
 }
 
 export class DiscordWebhookService {
-  private webhookUrl: string = 'https://discord.com/api/webhooks/1356321233699995678/nkUw_Q-N_l2TAXp8c-NYh0o3eLzbxManNDFZT5QziMfrTr02Udjkb453ufjO5ziVG3eU';
+  private webhookUrl: string = 'https://discord.com/api/webhooks/1356801829815713792/rZluu8ouZaEBfoy9cbk4-SpOho58Y2pP3sF9nJmDXvIopny1jAps1AiRfF9D6sdYwBpt';
 
   /**
    * Send a PNL summary of closed orders to Discord
@@ -37,7 +37,6 @@ export class DiscordWebhookService {
     if (!this.webhookUrl) {
       return;
     }
-    return;
     try {
       // Calculate total PNL
       const totalPnl = currentBalance - initialBalance;

@@ -86,17 +86,11 @@ export class JitoBundleService {
             params: [encodedTx],
         }
 
-        try {
-            const response = await axios.post(jitoURL, payload, {
-                headers: { 'Content-Type': 'application/json' },
-            })
-            console.log('JitoTransaction sent region:', this.endpoint)
-            return response.data.result
-        } catch (error) {
-            this.updateRegion();
-            // console.error("Error:", error);
-            throw new Error('cannot send!')
-        }
+        const response = await axios.post(jitoURL, payload, {
+            headers: { 'Content-Type': 'application/json' },
+        })
+        console.log('JitoTransaction sent region:', this.endpoint)
+        return response.data.result
     }
 
     async getBundleStatus(bundleId: string) {

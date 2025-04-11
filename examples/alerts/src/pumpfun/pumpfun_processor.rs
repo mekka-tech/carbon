@@ -46,7 +46,31 @@ const PUMP_USERS: &[&str] = &[
     "73LnJ7G9ffBDjEBGgJDdgvLUhD5APLonKrNiHsKDCw5B",
     "5rkPDK4JnVAumgzeV2Zu8vjggMTtHdDtrsd5o9dhGZHD",
     "6m5sW6EAPAHncxnzapi1ZVJNRb9RZHQ3Bj7FD84X9rAF",
-    "4BdKaxN8G6ka4GYtQQWk4G4dZRUTX2vQH9GcXdBREFUk",
+    "BCagckXeMChUKrHEd6fKFA1uiWDtcmCXMsqaheLiUPJd",
+    // "3pZ59YENxDAcjaKa3sahZJBcgER4rGYi4v6BpPurmsGj",
+    "EHg5YkU2SZBTvuT87rUsvxArGp3HLeye1fXaSDfuMyaf",
+    "8rvAsDKeAcEjEkiZMug9k8v1y8mW6gQQiMobd89Uy7qR",
+    "7iabBMwmSvS4CFPcjW2XYZY53bUCHzXjCFEFhxeYP4CY",
+    "As7HjL7dzzvbRbaD3WCun47robib2kmAKRXMvjHkSMB5",
+    "96sErVjEN7LNJ6Uvj63bdRWZxNuBngj56fnT9biHLKBf",
+    "F72vY99ihQsYwqEDCfz7igKXA5me6vN2zqVsVUTpw6qL",
+    "215nhcAHjQQGgwpQSJQ7zR26etbjjtVdW74NLzwEgQjP",
+    "GJA1HEbxGnqBhBifH9uQauzXSB53to5rhDrzmKxhSU65",
+    "G3g1CKqKWSVEVURZDNMazDBv7YAhMNTjhJBVRTiKZygk",
+    "7ABz8qEFZTHPkovMDsmQkm64DZWN5wRtU7LEtD2ShkQ6",
+    "EaVboaPxFCYanjoNWdkxTbPvt57nhXGu5i6m9m6ZS2kK",
+    
+];
+
+const AXIOM_WALLETS: &[&str] = &[
+    "JDd3hy3gQn2V982mi1zqhNqUw1GfV2UL6g76STojCJPN",
+    "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj",
+    "AJ6MGExeK7FXmeKkKPmALjcdXVStXYokYNv9uVfDRtvo",
+    "DNfuF1L62WWyW3pNakVkyGGFzVVhj4Yr52jSmdTyeBHm",
+    // "BCnqsPEtA1TkgednYEebRpkmwFRJDCjMQcKZMMtEdArc",
+    "73LnJ7G9ffBDjEBGgJDdgvLUhD5APLonKrNiHsKDCw5B",
+    "5rkPDK4JnVAumgzeV2Zu8vjggMTtHdDtrsd5o9dhGZHD",
+    "6m5sW6EAPAHncxnzapi1ZVJNRb9RZHQ3Bj7FD84X9rAF",
     "BCagckXeMChUKrHEd6fKFA1uiWDtcmCXMsqaheLiUPJd",
     "3pZ59YENxDAcjaKa3sahZJBcgER4rGYi4v6BpPurmsGj",
     "EHg5YkU2SZBTvuT87rUsvxArGp3HLeye1fXaSDfuMyaf",
@@ -57,44 +81,40 @@ const PUMP_USERS: &[&str] = &[
     "F72vY99ihQsYwqEDCfz7igKXA5me6vN2zqVsVUTpw6qL",
     "215nhcAHjQQGgwpQSJQ7zR26etbjjtVdW74NLzwEgQjP",
     "GJA1HEbxGnqBhBifH9uQauzXSB53to5rhDrzmKxhSU65",
-    "G3g1CKqKWSVEVURZDNMazDBv7YAhMNTjhJBVRTiKZygk", // Insider
-    "BXNiM7pqt9Ld3b2Hc8iT3mA5bSwoe9CRrtkSUs15SLWN",
+    // "G3g1CKqKWSVEVURZDNMazDBv7YAhMNTjhJBVRTiKZygk",
     "7ABz8qEFZTHPkovMDsmQkm64DZWN5wRtU7LEtD2ShkQ6",
     "EaVboaPxFCYanjoNWdkxTbPvt57nhXGu5i6m9m6ZS2kK",
-    "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
-    
-];
-
-const AXIOM_WALLETS: &[&str] = &[
-    "BXNiM7pqt9Ld3b2Hc8iT3mA5bSwoe9CRrtkSUs15SLWN",
-    "FRbUNvGxYNC1eFngpn7AD3f14aKKTJVC6zSMtvj2dyCS",
-    "719sfKUjiMThumTt2u39VMGn612BZyCcwbM5Pe8SqFYz",
-    "6Rfz9C1DSZd8mpDgptYi4y3iq4GsZRH1uV7CeBu7qkrL",
-    "GDF6ocfnuan48G21sgSRWMWDEzTfGQcMyKU5UWy3ga84",
-    "4BdKaxN8G6ka4GYtQQWk4G4dZRUTX2vQH9GcXdBREFUk",
-    "ARQvZuk15nmF7qZHLresn7r3awqSpQTTRDpnJLzJZCap",
-    "13E1Ut5Tu4AzLeazjgEWyfU44QXP7jkfya5qRfxdUx48",
-    "22kFm8b2Vb7itdz51dNGd1tn9hkKgF82sc2jNEQkGafp",
-    "28ipXVfkdmu1PDowCHbcSfzkpH9edZmSiVoDhY5xGVfR",
-    "2F19ZXrvQDCoYXdBoFBiBcEmgrAKYAheZHnQxZksHQhN",
-    "2HWT2KLLdN2wxYTqdSuko5SBzg2SEJASgV4GE2tD7TML",
-    "2JUsjGsrU9aKKWRFGxSKNV61HXbPZakM5JJYufwFaWhm",
-    "2kv8X2a9bxnBM8NKLc6BBTX2z13GFNRL4oRotMUJRva9",
-    "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
-    "3h65MmPZksoKKyEpEjnWU2Yk2iYT5oZDNitGy5cTaxoE",
-    "3jN1M8gWLk2ryTGnscrcwRK1Gy4Ttzq5QizWT8uizZsT",
-    "3NzdGknBeQivGUoDzHhaHxLEDN7tNWUyKj5xkqyb4mui",
-    "3ubt1SkopkPkL8raULj9sXMgnhh52LQZQRX7AzuFd8ux",
-    "3uswT1DpBfrpkyJzwZndLV5ZuytAsUvr8dXjYx3pWccq",
+    // "BXNiM7pqt9Ld3b2Hc8iT3mA5bSwoe9CRrtkSUs15SLWN",
+    // "FRbUNvGxYNC1eFngpn7AD3f14aKKTJVC6zSMtvj2dyCS",
+    // "719sfKUjiMThumTt2u39VMGn612BZyCcwbM5Pe8SqFYz",
+    // "6Rfz9C1DSZd8mpDgptYi4y3iq4GsZRH1uV7CeBu7qkrL",
+    // "GDF6ocfnuan48G21sgSRWMWDEzTfGQcMyKU5UWy3ga84",
+    // "4BdKaxN8G6ka4GYtQQWk4G4dZRUTX2vQH9GcXdBREFUk",
+    // "ARQvZuk15nmF7qZHLresn7r3awqSpQTTRDpnJLzJZCap",
+    // "13E1Ut5Tu4AzLeazjgEWyfU44QXP7jkfya5qRfxdUx48",
+    // "22kFm8b2Vb7itdz51dNGd1tn9hkKgF82sc2jNEQkGafp",
+    // "28ipXVfkdmu1PDowCHbcSfzkpH9edZmSiVoDhY5xGVfR",
+    // "2F19ZXrvQDCoYXdBoFBiBcEmgrAKYAheZHnQxZksHQhN",
+    // "2HWT2KLLdN2wxYTqdSuko5SBzg2SEJASgV4GE2tD7TML",
+    // "2JUsjGsrU9aKKWRFGxSKNV61HXbPZakM5JJYufwFaWhm",
+    // "2kv8X2a9bxnBM8NKLc6BBTX2z13GFNRL4oRotMUJRva9",
+    // "2YJbcB9G8wePrpVBcT31o8JEed6L3abgyCjt5qkJMymV",
+    // "3h65MmPZksoKKyEpEjnWU2Yk2iYT5oZDNitGy5cTaxoE",
+    // "3jN1M8gWLk2ryTGnscrcwRK1Gy4Ttzq5QizWT8uizZsT",
+    // "3NzdGknBeQivGUoDzHhaHxLEDN7tNWUyKj5xkqyb4mui",
+    // "3ubt1SkopkPkL8raULj9sXMgnhh52LQZQRX7AzuFd8ux",
+    // "3uswT1DpBfrpkyJzwZndLV5ZuytAsUvr8dXjYx3pWccq",
 ];
 
 const OUR_WALLETS: &[&str] = &[
     "744ZryTiFQ1LDySKUikc93M7MT7ZdB3DnFGsrT1gYhNW",
+    "717v7AJ4xzahiS2xjXLZMYK3soJmpHFmykWPzutgDydM",
 ];
 
 const VIRTUAL_SOL_RESERVES: u64 = 30000000017;
 const VIRTUAL_TOKEN_RESERVES: u64 = 1073000000000000;
 static COUNTER: Mutex<i32> = Mutex::new(0);
+
 pub struct PumpfunInstructionProcessor;
 
 #[async_trait]
@@ -117,7 +137,7 @@ impl Processor for PumpfunInstructionProcessor {
             // PumpfunInstruction::Create(create) => match Create::arrange_accounts(&accounts) {
             //     Some(accounts) => {
             //         let mut counter = COUNTER.lock().unwrap();
-            //         if *counter > 3 { return Ok(()); }
+            //         if *counter > 1 { return Ok(()); }
 
             //         println!("Create Event: {:#?}", accounts);
             //         let user_str = metadata.transaction_metadata.fee_payer.to_string();
@@ -144,10 +164,13 @@ impl Processor for PumpfunInstructionProcessor {
             // },
             PumpfunInstruction::Buy(buy) => match Buy::arrange_accounts(&accounts) {
                 Some(accounts) => {
-                    let mut counter = COUNTER.lock().unwrap();
-                    if *counter > 3 { return Ok(()); }
-
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
+                    let mut counter = COUNTER.lock().unwrap();
+                    if (*counter > 5 && !OUR_WALLETS.contains(&user_str.as_str())) { 
+                        println!("Cant OPEN more than 5 positions");
+                        return Ok(()); 
+                    }
+
                     if (
                         // PUMP_USERS.contains(&user_str.as_str())
                         AXIOM_WALLETS.contains(&user_str.as_str()) 

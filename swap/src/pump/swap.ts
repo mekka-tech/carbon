@@ -35,6 +35,7 @@ import { getFeeInstruction, getJitoFeeInstruction } from '../utils/swap.instruct
 import { OrderBook, OrderStatus } from '../services/order.book'
 import { TokenService } from '../services/token.service'
 import { OWNER_ADDRESS } from '../config'
+import { buyWithJupiter, sellWithJupiter } from '../services/jupiter.swap'
 
 const alreadySwappedBuy: string[] = []
 const alreadySwappedSell: string[] = []
@@ -51,6 +52,7 @@ export async function pumpFunSwap(
     gasFee: number,
     _slippage: number,
     mevFee: number,
+    closeAccount: boolean = false,
     orderBook: OrderBook
 ): Promise<any> {
     try {
@@ -87,10 +89,8 @@ export async function pumpFunSwap(
 
         let amountWithDecimals = Math.floor(_amount * 10 ** inDecimal)
 
-
         const tokenAccountIn = getAssociatedTokenAddressSync(is_buy ? NATIVE_MINT : mint, owner, true)
         const tokenAccountOut = getAssociatedTokenAddressSync(is_buy ? mint : NATIVE_MINT, owner, true)
-
         const tokenAccountAddress = await getAssociatedTokenAddress(mint, owner, false)
 
         const keys = getSwapKeys(owner, mint, tokenAccountAddress, bondingCurve, associatedBondingCurve, is_buy)
@@ -99,7 +99,6 @@ export async function pumpFunSwap(
         let quoteAmount = 0
 
         if (is_buy) {
-
             const tokenOut = Math.floor(_amount / price) * 10 ** 6
             const solInWithSlippage = amountWithDecimals * (1 + slippage)
             const maxSolCost = Math.floor(solInWithSlippage)
@@ -148,8 +147,8 @@ export async function pumpFunSwap(
                 createAssociatedTokenAccountIdempotentInstruction(owner, tokenAccountOut, owner, NATIVE_MINT),
                 ...swapInstructions,
                 // Unwrap WSOL for SOL
+                ...(closeAccount ? [createCloseAccountInstruction(tokenAccountIn, owner, owner)]:[]),
                 createCloseAccountInstruction(tokenAccountOut, owner, owner),
-                createCloseAccountInstruction(tokenAccountIn, owner, owner),
             ]
 
         const transaction = await signV0Transaction(instructions, payer as unknown as Wallet, [])
@@ -183,17 +182,35 @@ export async function pumpFunSwap(
         //     error,
         // })
         if (!is_buy) {
-            const order = orderBook._getOrder(mintStr)
-            if (order?.status === OrderStatus.CLOSED)  {
-                alreadySwappedSell.splice(alreadySwappedSell.indexOf(mintStr), 1)
-                const tokenBalance = await TokenService.getTokenBalance(new PublicKey(OWNER_ADDRESS), new PublicKey(mintStr))
-                order.status = OrderStatus.OPEN
-                order.amount_bought = tokenBalance / 10 ** 6;
-                orderBook._updateOrder(order)
+            console.log(' - Swap pump token is failed', error)
+            
+            try {
+                const txId = await sellWithJupiter(payer, mintStr, _amount, decimal, _slippage)
+                return {
+                    success: true,
+                    txHash: txId,
+                    tokenAddress: mintStr,
+                    bundleId: '',
+                    quote: { inAmount: _amount, outAmount: 0 },
+                }
+            } catch (error: any) {
+                console.log('SELL Swap pump token with Jupiter failed', error)
+            }
+        } else {
+            try {
+                const txId = await buyWithJupiter(payer, mintStr, _amount, _slippage)
+                return {
+                    success: true,
+                    txHash: txId,
+                    tokenAddress: mintStr,
+                    bundleId: '',
+                    quote: { inAmount: _amount, outAmount: 0 },
+                }
+            } catch (error: any) {
+                console.log('BUY Swap pump token with Jupiter failed', error)
             }
         }
 
-        console.log(' - Swap pump token is failed', error)
         return {
             success: false,
             error: (error as Error)?.message?.toString(),

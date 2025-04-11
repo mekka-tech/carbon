@@ -43,7 +43,6 @@ export async function sendRawTransactionOrBundle(transaction: VersionedTransacti
 
     const jitoBundleInstance = new JitoBundleService()
     const bundleId = await jitoBundleInstance.sendTransaction(rawTransaction)
-    if (!bundleId) throw new Error('JITO_BUNDLE_ERROR')
     console.log(`https://solscan.io/tx/${signature}`)
     return { bundleId, signature }
 }

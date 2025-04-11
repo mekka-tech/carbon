@@ -56,7 +56,7 @@ export class OrderBook {
     }
     
     // Process a trade
-    processTrade(mint: string, side: Side, price: number, amount: number, origin: string, signature: string, bondingCurve: string, associatedBondingCurve: string): Order | undefined {
+    processTrade(mint: string, side: Side, price: number, amount: number, origin: string, signature: string, bondingCurve: string, associatedBondingCurve: string, isMe: boolean = false): Order | undefined {
         const order = this._getOrder(mint);
         if (!order && side === Side.BUY) {
             if (!bondingCurve || !associatedBondingCurve) { return undefined }
@@ -72,7 +72,7 @@ export class OrderBook {
                 timestamp_bought: Date.now(),
                 timestamp_sold: 0,
                 pnl: 0,
-                status: OrderStatus.PENDING,
+                status: !isMe ? OrderStatus.PENDING : OrderStatus.OPEN,
                 origin: origin,
                 bonding_curve: bondingCurve,
                 associated_bonding_curve: associatedBondingCurve
