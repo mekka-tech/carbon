@@ -59,14 +59,14 @@ lazy_static! {
         env::var("MIN_CREATOR_BALANCE")
             .unwrap_or_else(|_| "1".to_string())
             .parse::<u64>()
-            .unwrap_or(1)
+            .unwrap_or(1) * 1_000_000_000
     };
     static ref MAX_CREATOR_BUY: u64 = {
         dotenv().ok();
         env::var("MAX_CREATOR_BUY")
             .unwrap_or_else(|_| "1".to_string())
             .parse::<u64>()
-            .unwrap_or(1)
+            .unwrap_or(1) * 1_000_000_000
     };
 }
 
@@ -83,6 +83,8 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
         DecodedInstruction<PumpfunInstruction>,
         Vec<NestedInstruction>,
     );
+    30000000000
+    39004700420
 
     async fn process(
         &mut self,
@@ -108,7 +110,7 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
 
 
             
-                    if pre_balance < *MIN_CREATOR_BALANCE * 1e9 as u64 && diff_balance > *MAX_CREATOR_BUY * 1e9 as u64 {
+                    if pre_balance < *MIN_CREATOR_BALANCE && diff_balance > *MAX_CREATOR_BUY {
                         return Ok(());
                     }
                     let mut counter = COUNTER.lock().unwrap();
@@ -117,8 +119,8 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
                     println!("Pre Balance: {}", pre_balance);
                     println!("Post Balance: {}", post_balance);
                     println!("Diff Balance: {}", diff_balance);
-                    println!("Min Creator Balance: {}", *MIN_CREATOR_BALANCE * 1e9 as u64);
-                    println!("Max Creator Buy: {}", *MAX_CREATOR_BUY * 1e9 as u64);
+                    println!("Min Creator Balance: {}", *MIN_CREATOR_BALANCE);
+                    println!("Max Creator Buy: {}", *MAX_CREATOR_BUY);
                     
                     println!("Create Event: {:#?}", accounts);
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
