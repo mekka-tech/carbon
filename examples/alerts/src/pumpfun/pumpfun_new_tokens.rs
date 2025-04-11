@@ -47,6 +47,13 @@ lazy_static! {
         dotenv().ok();
         vec![env::var("OWNER_ADDRESS").expect("OWNER_ADDRESS is empty in .env")]
     };
+    static ref MAX_TOKEN_BUY: i32 = {
+        dotenv().ok();
+        env::var("MAX_TOKEN_BUY")
+            .unwrap_or_else(|_| "1".to_string())
+            .parse::<i32>()
+            .unwrap_or(1)
+    };
 }
 
 const VIRTUAL_SOL_RESERVES: u64 = 30000000017;
@@ -75,7 +82,7 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
             PumpfunInstruction::Create(create) => match Create::arrange_accounts(&accounts) {
                 Some(accounts) => {
                     let mut counter = COUNTER.lock().unwrap();
-                    if *counter > 1 { return Ok(()); }
+                    if *counter > *MAX_TOKEN_BUY { return Ok(()); }
 
                     println!("Create Event: {:#?}", accounts);
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();

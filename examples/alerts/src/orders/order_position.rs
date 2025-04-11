@@ -1,5 +1,9 @@
 use chrono::Utc;
-use std::fmt::{Formatter, Display, Result};  
+use std::fmt::{Formatter, Display, Result}; 
+use dotenv::dotenv;
+use std::env; 
+use lazy_static::lazy_static;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Status {
   OPEN,
@@ -98,6 +102,72 @@ pub struct EnhancedPosition {
   pub range_change_counter: i8, // Counter for range change.
 }
 
+lazy_static! {
+  static ref TRT: f64 = {
+      dotenv().ok();
+      env::var("TRT")
+          .unwrap_or_else(|_| "40.0".to_string())
+          .parse::<f64>()
+          .unwrap_or(40.0)
+  };
+  static ref TRB: f64 = {
+      dotenv().ok();
+      env::var("TRB")
+          .unwrap_or_else(|_| "20.0".to_string())
+          .parse::<f64>()
+          .unwrap_or(20.0)
+  };
+  static ref TRD: i64 = {
+      dotenv().ok();
+      env::var("TRD")
+          .unwrap_or_else(|_| "5000".to_string())
+          .parse::<i64>()
+          .unwrap_or(5000)
+  };
+  static ref MRT: f64 = {
+      dotenv().ok();
+      env::var("MRT")
+          .unwrap_or_else(|_| "20.0".to_string())
+          .parse::<f64>()
+          .unwrap_or(20.0)
+  };
+  static ref MRB: f64 = {
+      dotenv().ok();
+      env::var("MRB")
+          .unwrap_or_else(|_| "-20.0".to_string())
+          .parse::<f64>()
+          .unwrap_or(-20.0)
+  };
+  static ref MRD: i64 = {
+      dotenv().ok();
+      env::var("MRD")
+          .unwrap_or_else(|_| "10000".to_string())
+          .parse::<i64>()
+          .unwrap_or(10000)
+  };
+  static ref BRT: f64 = {
+      dotenv().ok();
+      env::var("BRT")
+          .unwrap_or_else(|_| "-20.0".to_string())
+          .parse::<f64>()
+          .unwrap_or(-20.0)
+  };
+  static ref BRB: f64 = {
+      dotenv().ok();
+      env::var("BRB")
+          .unwrap_or_else(|_| "-40.0".to_string())
+          .parse::<f64>()
+          .unwrap_or(-40.0)
+  };
+  static ref BRD: i64 = {
+      dotenv().ok();
+      env::var("BRD")
+          .unwrap_or_else(|_| "3000".to_string())
+          .parse::<i64>()
+          .unwrap_or(3000)
+  };
+}
+
 impl EnhancedPosition {
   pub fn new(user: String, mint: String, entry_price: f64) -> Self {
     let now = Utc::now().timestamp_millis();
@@ -110,9 +180,9 @@ impl EnhancedPosition {
       zone: Zone::TOP,
       entry_timestamp: now,
       range_change_timestamp: now,
-      top_range: Range::new(Zone::TOP, entry_price, 40.0, 20.0, 7000),
-      median_range: Range::new(Zone::MEDIAN, entry_price, 20.0, -20.0, 20000),
-      bottom_range: Range::new(Zone::BOTTOM, entry_price, -20.0, -40.0, 5000),
+      top_range: Range::new(Zone::TOP, entry_price, *TRT, *TRB, *TRD),
+      median_range: Range::new(Zone::MEDIAN, entry_price, *MRT, *MRB, *MRD),
+      bottom_range: Range::new(Zone::BOTTOM, entry_price, *BRT, *BRB, *BRD),
       range_change_counter: 0
     }
   }
