@@ -164,6 +164,7 @@ wss.on('connection', (ws: WebSocket) => {
   // Handle messages from clients
   ws.on('message', async (message: Buffer) => {
     const data = JSON.parse(message.toString('utf-8')) as SwapOrder;
+    console.log(data)
 
     const now = new Date().getTime()
     const timeDiff = now - data.timestamp
