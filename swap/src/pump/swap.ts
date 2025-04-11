@@ -40,6 +40,8 @@ import { buyWithJupiter, sellWithJupiter } from '../services/jupiter.swap'
 const alreadySwappedBuy: string[] = []
 const alreadySwappedSell: string[] = []
 
+const DISABLE_SIMULATE = process.env.DISABLE_SIMULATE === 'true'
+
 export async function pumpFunSwap(
     payer: Keypair,
     mintStr: string,
@@ -153,7 +155,9 @@ export async function pumpFunSwap(
 
         const transaction = await signV0Transaction(instructions, payer as unknown as Wallet, [])
 
-        await trySimulateTransaction(transaction, is_buy, mintStr)
+        if (!DISABLE_SIMULATE) {
+            await trySimulateTransaction(transaction, is_buy, mintStr)
+        }
 
         console.time('sendRawTransactionOrBundle')
         const { bundleId, signature } = await sendRawTransactionOrBundle(transaction, mevFee)
