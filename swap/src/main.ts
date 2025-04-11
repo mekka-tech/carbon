@@ -51,14 +51,16 @@ const payer = getKeyPairFromPrivateKey(process.env.PRIVATE_KEY!)
 const CREATORS = [OWNER_ADDRESS]
 let CURRENT_BALANCE = 0
 let INITIAL_BALANCE = 0
-let MIN_BALANCE = 2
-let PROFIT_LOCK_PERCENTAGE = 0.8 // % of profits get locked
+let MIN_BALANCE = parseFloat(process.env.MIN_BALANCE_INITIAL || '2')
+let PROFIT_LOCK_PERCENTAGE = parseFloat(process.env.PROFIT_LOCK_PERCENTAGE || '0.8') // % of profits get locked
+let MIN_BALANCE_PERCENTAGE = parseFloat(process.env.MIN_BALANCE_PERCENTAGE || '80') // % of balance to keep
+
 const updateBalances = async () => {
   const balance = await private_connection.getBalance(payer.publicKey)
   let balanceInSol = balance / LAMPORTS_PER_SOL
   if (INITIAL_BALANCE === 0) {
     INITIAL_BALANCE = balanceInSol
-    MIN_BALANCE = INITIAL_BALANCE - 1;
+    MIN_BALANCE = INITIAL_BALANCE - ((100 - MIN_BALANCE_PERCENTAGE) * INITIAL_BALANCE / 100);
   }
   console.log('===============================================')
   if (balanceInSol !== CURRENT_BALANCE) {  
@@ -70,12 +72,14 @@ const updateBalances = async () => {
     if (CURRENT_BALANCE > INITIAL_BALANCE) {
       const totalProfit = CURRENT_BALANCE - INITIAL_BALANCE
       const profitToLock = totalProfit * PROFIT_LOCK_PERCENTAGE
-      MIN_BALANCE = 2 + profitToLock
+      const newInitialBalance = INITIAL_BALANCE + profitToLock
+      MIN_BALANCE = newInitialBalance - ((100 - MIN_BALANCE_PERCENTAGE) * newInitialBalance / 100);
       console.log(`MIN_BALANCE updated to: ${MIN_BALANCE.toFixed(4)} SOL`)
     }
   }
-  console.log('BALANCE:', CURRENT_BALANCE)
-  console.log('MIN_BALANCE:', MIN_BALANCE.toFixed(4))
+  console.log('BALANCE:', +CURRENT_BALANCE.toFixed(4))
+  console.log('MIN_BALANCE:', +MIN_BALANCE.toFixed(4))
+  console.log('INITIAL_BALANCE:', +INITIAL_BALANCE.toFixed(4))
   console.log('===============================================')
 }
 setInterval(() => {
