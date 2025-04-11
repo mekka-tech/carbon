@@ -4474,6 +4474,7 @@ dependencies = [
  "chrono",
  "dotenv",
  "env_logger",
+ "lazy_static",
  "log",
  "once_cell",
  "rabbitmq-stream-client",

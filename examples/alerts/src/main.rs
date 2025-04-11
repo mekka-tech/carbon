@@ -5,6 +5,7 @@ mod raydium {
 }
 mod pumpfun {
     pub mod pumpfun_processor;
+    pub mod pumpfun_new_tokens;
     pub mod swap;
 }
 mod token {
@@ -22,6 +23,7 @@ mod orders {
 
 use token::token_processor::{TokenProcessor, TokenAccountProcessor};
 use pumpfun::pumpfun_processor::PumpfunInstructionProcessor;
+use pumpfun::pumpfun_new_tokens::PumpfunNewTokensInstructionProcessor;
 use pumpfun::swap::SwapPublisher;
 use raydium::amm_v4_processor::{RaydiumAmmV4AccountProcessor, RaydiumAmmV4InstructionProcessor};
 use raydium::clmm_processor::{RaydiumClmmAccountProcessor, RaydiumClmmInstructionProcessor};
@@ -203,7 +205,8 @@ pub async fn main() -> CarbonResult<()> {
         // .instruction(RaydiumAmmV4Decoder, RaydiumAmmV4InstructionProcessor)
         // .instruction(RaydiumClmmDecoder, RaydiumClmmInstructionProcessor)
         // .instruction(RaydiumCpmmDecoder, RaydiumCpmmInstructionProcessor)
-        .instruction(PumpfunDecoder, PumpfunInstructionProcessor)
+        //.instruction(PumpfunDecoder, PumpfunInstructionProcessor)
+        .instruction(PumpfunDecoder, PumpfunNewTokensInstructionProcessor)
         // .instruction(TokenProgramDecoder, TokenProcessor)
         // .account(RaydiumAmmV4Decoder, RaydiumAmmV4AccountProcessor)
         // .account(RaydiumClmmDecoder, RaydiumClmmAccountProcessor)

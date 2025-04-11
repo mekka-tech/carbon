@@ -22,7 +22,7 @@ pub struct SwapOrder {
   pub sol_amount: String,
   pub bonding_curve: String,
   pub associated_bonding_curve: String,
-  pub decimal: u8,
+  pub decimals: u8,
   pub is_buy: bool,
   pub origin: String,
   pub timestamp: i64,

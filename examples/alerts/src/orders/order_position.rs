@@ -111,7 +111,7 @@ impl EnhancedPosition {
       entry_timestamp: now,
       range_change_timestamp: now,
       top_range: Range::new(Zone::TOP, entry_price, 40.0, 20.0, 7000),
-      median_range: Range::new(Zone::MEDIAN, entry_price, 20.0, -20.0, 15000),
+      median_range: Range::new(Zone::MEDIAN, entry_price, 20.0, -20.0, 20000),
       bottom_range: Range::new(Zone::BOTTOM, entry_price, -20.0, -40.0, 5000),
       range_change_counter: 0
     }
