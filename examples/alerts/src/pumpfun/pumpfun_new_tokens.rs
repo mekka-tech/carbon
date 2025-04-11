@@ -78,6 +78,12 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
         let signature = metadata.transaction_metadata.signature;
         let accounts = instruction.accounts;
         
+        let pre_balance = metadata.transaction_metadata.meta.pre_balances[0];
+        let post_balance = metadata.transaction_metadata.meta.post_balances[0];
+
+        println!("Pre Balance: {}", pre_balance);
+        println!("Post Balance: {}", post_balance);
+
         match instruction.data {
             PumpfunInstruction::Create(create) => match Create::arrange_accounts(&accounts) {
                 Some(accounts) => {
