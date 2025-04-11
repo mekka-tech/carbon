@@ -60,6 +60,7 @@ export const blockchainErrorMap: Record<string, string> = {
   "0x1765": "Token migrated to Raydium.",
   "0x1": "Another error occurred",
   "6": "IncorrectProgramId",
+  "6002": "Slippage, need more SOL",
 };
 
 export function genericBlockchainError(code: string): string {
