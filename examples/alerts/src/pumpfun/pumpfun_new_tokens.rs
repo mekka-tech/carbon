@@ -94,17 +94,21 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
         
         let pre_balance = metadata.transaction_metadata.meta.pre_balances[0];
         let post_balance = metadata.transaction_metadata.meta.post_balances[0];
-        let diff_balance = pre_balance - post_balance;
-
-        if pre_balance < *MIN_CREATOR_BALANCE * 1e9 as u64 && diff_balance > *MAX_CREATOR_BUY * 1e9 as u64 {
-            return Ok(());
-        }
+        
         // println!("Pre Balance: {}", pre_balance);
         // println!("Post Balance: {}", post_balance);
 
         match instruction.data {
             PumpfunInstruction::Create(create) => match Create::arrange_accounts(&accounts) {
                 Some(accounts) => {
+                    if post_balance > pre_balance {
+                        return Ok(());
+                    }
+                    let diff_balance = pre_balance - post_balance;
+            
+                    if pre_balance < *MIN_CREATOR_BALANCE * 1e9 as u64 && diff_balance > *MAX_CREATOR_BUY * 1e9 as u64 {
+                        return Ok(());
+                    }
                     let mut counter = COUNTER.lock().unwrap();
                     if *counter > *MAX_TOKEN_BUY { return Ok(()); }
 
