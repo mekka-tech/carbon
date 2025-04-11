@@ -183,7 +183,7 @@ export async function pumpFunSwap(
         // })
         if (!is_buy) {
             console.log(' - Swap pump token is failed', error)
-            
+
             try {
                 const txId = await sellWithJupiter(payer, mintStr, _amount, decimal, _slippage)
                 return {
@@ -197,18 +197,35 @@ export async function pumpFunSwap(
                 console.log('SELL Swap pump token with Jupiter failed', error)
             }
         } else {
-            try {
-                const txId = await buyWithJupiter(payer, mintStr, _amount, _slippage)
-                return {
-                    success: true,
-                    txHash: txId,
-                    tokenAddress: mintStr,
-                    bundleId: '',
-                    quote: { inAmount: _amount, outAmount: 0 },
-                }
-            } catch (error: any) {
-                console.log('BUY Swap pump token with Jupiter failed', error)
-            }
+
+            pumpFunSwap(
+                payer,
+                mintStr,
+                price,
+                bondingCurve,
+                associatedBondingCurve,
+                decimal,
+                is_buy,
+                _amount,
+                gasFee,
+                _slippage,
+                mevFee,
+                closeAccount,
+                orderBook
+            )
+
+            // try {
+            //     const txId = await buyWithJupiter(payer, mintStr, _amount, _slippage)
+            //     return {
+            //         success: true,
+            //         txHash: txId,
+            //         tokenAddress: mintStr,
+            //         bundleId: '',
+            //         quote: { inAmount: _amount, outAmount: 0 },
+            //     }
+            // } catch (error: any) {
+            //     console.log('BUY Swap pump token with Jupiter failed', error)
+            // }
         }
 
         return {

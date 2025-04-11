@@ -72,7 +72,7 @@ export async function trySimulateTransaction(transaction: VersionedTransaction, 
                 humanMessage = genericBlockchainError(code)
                 console.log('⛔ Error en la blockchain:', humanMessage)
             } else {
-                console.log('Error sin código personalizado:', err, logs)
+                console.log('Error sin código personalizado:', err ?? logs)
             }
         }
         throw new Error(humanMessage)
