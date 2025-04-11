@@ -9,6 +9,7 @@ pub struct Create {
     pub symbol: String,
     pub uri: String,
     pub creator: solana_sdk::pubkey::Pubkey,
+    pub timestamp: i64,
 }
 
 #[derive(Debug, PartialEq)]

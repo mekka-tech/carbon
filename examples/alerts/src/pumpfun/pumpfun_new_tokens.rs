@@ -100,7 +100,7 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
                         decimals: 6,
                         is_buy: true,
                         origin: "normal".to_string(),
-                        timestamp: timestamp,
+                        timestamp: create.timestamp,
                         signature: signature.to_string(),
                     }).unwrap();
                     socket.socket.send(Message::Text(body.into())).unwrap_or(());
@@ -158,7 +158,7 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
                                 decimals: 6,
                                 is_buy: false,
                                 origin: "take_profit".to_string(),
-                                timestamp: metadata.transaction_metadata.block_time.unwrap_or(0),
+                                timestamp: trade_event.timestamp,
                                 signature: signature.to_string(),
                             }).unwrap();
                             socket.socket.send(Message::Text(body.into())).unwrap_or(());
