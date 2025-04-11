@@ -95,6 +95,7 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
         match instruction.data {
             PumpfunInstruction::Create(create) => match Create::arrange_accounts(&accounts) {
                 Some(accounts) => {
+                    println!("Mint:  {}", accounts.mint.to_string());
                     let pre_balance = metadata.transaction_metadata.meta.pre_balances[0];
                     let post_balance = metadata.transaction_metadata.meta.post_balances[0];
 
@@ -102,20 +103,18 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
                         return Ok(());
                     }
                     let diff_balance = pre_balance - post_balance;
-
-
             
-                    if pre_balance < *MIN_CREATOR_BALANCE && diff_balance > *MAX_CREATOR_BUY {
+                    if pre_balance < *MIN_CREATOR_BALANCE || diff_balance > *MAX_CREATOR_BUY {
                         return Ok(());
                     }
                     let mut counter = COUNTER.lock().unwrap();
                     if *counter > *MAX_TOKEN_BUY { return Ok(()); }
                     
-                    println!("Pre Balance: {}", pre_balance);
+                    println!("Pre Balance:  {}", pre_balance);
                     println!("Post Balance: {}", post_balance);
                     println!("Diff Balance: {}", diff_balance);
-                    println!("Min Creator Balance: {}", *MIN_CREATOR_BALANCE);
-                    println!("Max Creator Buy: {}", *MAX_CREATOR_BUY);
+                    println!("Min Ctor Bal: {}", *MIN_CREATOR_BALANCE);
+                    println!("Max Ctor Buy: {}", *MAX_CREATOR_BUY);
                     
                     println!("Create Event: {:#?}", accounts);
                     let user_str = metadata.transaction_metadata.fee_payer.to_string();
