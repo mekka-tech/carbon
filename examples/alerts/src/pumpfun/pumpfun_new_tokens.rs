@@ -39,7 +39,7 @@ fn time_ago(timestamp: i64) -> String {
 
 }
 
-const SOL_PRICE: f64 = 131.6;
+const SOL_PRICE: f64 = 115.99;
 
 
 lazy_static! {
