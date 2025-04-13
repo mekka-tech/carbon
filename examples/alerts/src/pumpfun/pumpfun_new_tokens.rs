@@ -68,6 +68,9 @@ lazy_static! {
             .parse::<u64>()
             .unwrap_or(1) * 1_000_000_000
     };
+    static ref BLACKLISTED_CREATORS: Vec<String> = vec![
+        "ADC1QV9raLnGGDbnWdnsxazeZ4Tsiho4vrWadYswA2ph".to_string(),
+    ];
 }
 
 const VIRTUAL_SOL_RESERVES: u64 = 30000000017;
@@ -108,16 +111,16 @@ impl Processor for PumpfunNewTokensInstructionProcessor {
                         return Ok(());
                     }
                     let mut counter = COUNTER.lock().unwrap();
-                    if *counter > *MAX_TOKEN_BUY { return Ok(()); }
-                    
-                    println!("Pre Balance:  {}", pre_balance);
-                    println!("Post Balance: {}", post_balance);
-                    println!("Diff Balance: {}", diff_balance);
-                    println!("Min Ctor Bal: {}", *MIN_CREATOR_BALANCE);
-                    println!("Max Ctor Buy: {}", *MAX_CREATOR_BUY);
+                    if *counter > *MAX_TOKEN_BUY { 
+                        return Ok(()); 
+                    }
+
+                    let user_str = metadata.transaction_metadata.fee_payer.to_string();
+                    if BLACKLISTED_CREATORS.contains(&user_str) {
+                        return Ok(());
+                    }
                     
                     println!("Create Event: {:#?}", accounts);
-                    let user_str = metadata.transaction_metadata.fee_payer.to_string();
                     let sol_amount: f64 = VIRTUAL_SOL_RESERVES as f64 / 1e9;
                     let token_amount: f64 = VIRTUAL_TOKEN_RESERVES as f64 / 1e6;
                     let timestamp = metadata.transaction_metadata.block_time.unwrap_or(Utc::now().timestamp_millis());
