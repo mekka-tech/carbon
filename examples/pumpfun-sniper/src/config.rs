@@ -57,7 +57,7 @@ pub struct Config {
     pub send_paths: BTreeSet<SendPath>,
     pub fast_providers: Vec<FastProvider>,
     pub compute_unit_limit: u32,
-    pub jito_block_engine_url: String,
+    pub jito_block_engine_urls: Vec<String>,
     pub jito_tip_lamports: u64,
     #[allow(dead_code)] // milestone 2: direct-TPU sender
     pub tpu_leaders_ahead: u64,
@@ -141,8 +141,19 @@ impl Config {
             send_paths,
             fast_providers,
             compute_unit_limit: num_env("COMPUTE_UNIT_LIMIT", 120_000)? as u32,
-            jito_block_engine_url: env::var("JITO_BLOCK_ENGINE_URL")
-                .unwrap_or_else(|_| "https://mainnet.block-engine.jito.wtf".to_string()),
+            // Jito allows 1 request/s per region per IP, so bundles are dealt
+            // across regions. Nearest-first.
+            jito_block_engine_urls: parse_csv(&env::var("JITO_BLOCK_ENGINE_URLS").unwrap_or_else(
+                |_| {
+                    "https://frankfurt.mainnet.block-engine.jito.wtf,\
+                     https://amsterdam.mainnet.block-engine.jito.wtf,\
+                     https://london.mainnet.block-engine.jito.wtf,\
+                     https://dublin.mainnet.block-engine.jito.wtf,\
+                     https://ny.mainnet.block-engine.jito.wtf,\
+                     https://slc.mainnet.block-engine.jito.wtf"
+                        .to_string()
+                },
+            )),
             jito_tip_lamports: sol_env("JITO_TIP_SOL", 0.0001)?,
             tpu_leaders_ahead: num_env("TPU_LEADERS_AHEAD", 2)?,
             funding_buffer_lamports: sol_env("FUNDING_BUFFER_SOL", 0.01)?,

@@ -140,10 +140,10 @@ impl BuyDispatcher {
             }));
         }
         if jito_enabled {
-            let url = self.cfg.jito_block_engine_url.clone();
+            let urls = self.cfg.jito_block_engine_urls.clone();
             let txs = txs.clone();
             paths.push(Box::pin(async move {
-                jito::send_bundles(&url, &txs).await;
+                jito::send_bundles(&urls, &txs).await;
             }));
         }
         if self.cfg.send_paths.contains(&SendPath::Tpu) {

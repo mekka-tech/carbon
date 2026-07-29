@@ -27,16 +27,35 @@ pub fn tip_instruction(payer: &Pubkey, lamports: u64) -> Instruction {
     system_instruction::transfer(payer, &tip_account, lamports)
 }
 
-/// Split the transactions into bundles of 5 and submit them all concurrently.
+/// Split the transactions into bundles of 5 and submit them concurrently,
+/// **one bundle per regional endpoint**.
+///
+/// Jito rate-limits to 1 request per second per IP per region, so firing six
+/// bundles at a single endpoint would 429 five of them. Bundles are therefore
+/// dealt round-robin across the configured regions; with 30 buys that means 6
+/// bundles across 6+ regions, one request each. Regions further from the box
+/// cost latency, so order `JITO_BLOCK_ENGINE_URLS` nearest-first.
+///
 /// Runs alongside the RPC spray, never instead of it: bundles only help when
 /// the next leader is a Jito leader.
-pub async fn send_bundles(block_engine_url: &str, txs: &[VersionedTransaction]) {
+pub async fn send_bundles(block_engine_urls: &[String], txs: &[VersionedTransaction]) {
+    if block_engine_urls.is_empty() {
+        return;
+    }
     let client = reqwest::Client::new();
-    let url = format!("{}/api/v1/bundles", block_engine_url.trim_end_matches('/'));
+    let bundle_count = txs.len().div_ceil(MAX_BUNDLE_SIZE);
+    if bundle_count > block_engine_urls.len() {
+        log::warn!(
+            "{bundle_count} jito bundles across only {} region(s) — Jito allows 1 request/s per \
+             region per IP, so some will be rate limited; add more regions to JITO_BLOCK_ENGINE_URLS",
+            block_engine_urls.len()
+        );
+    }
 
     let sends = txs.chunks(MAX_BUNDLE_SIZE).enumerate().map(|(i, chunk)| {
         let client = client.clone();
-        let url = url.clone();
+        let base = &block_engine_urls[i % block_engine_urls.len()];
+        let url = format!("{}/api/v1/bundles", base.trim_end_matches('/'));
         async move { (i, send_one_bundle(&client, &url, chunk).await) }
     });
 
