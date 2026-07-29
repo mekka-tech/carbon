@@ -89,13 +89,33 @@ TypeScript swap service. Those branches share **no merge base** with current
 ### In flight when this session ended
 Nothing — both subagents completed and their work is committed.
 
+- **`create_v2` launches are sniped too.** `CreateV2` now produces a snipe
+  signal like `Create`, and the dispatcher builds `buy_exact_quote_in_v2`
+  (27 accounts) instead of `buy_exact_sol_in`. v2 coins are Token-2022 and
+  trade against a *quote mint* (WSOL), so each v2 buy also wraps SOL —
+  create WSOL ATA → transfer → `sync_native` → create the Token-2022 ATA → buy,
+  with an optional `close_account` to unwrap the remainder.
+
+  Verified against mainnet the same way v1 was: all 27 derived addresses
+  matched three real successful buys account-for-account. Unlike v1, the
+  trailing `bonding_curve_v2` is **optional** here — v2 promotes
+  `buyback_fee_recipient` to a named account, so a 27-account buy is complete.
+  It is appended only for `is_mayhem_mode` coins, on the mayhem program.
+  See VERIFICATION.md §5. Toggle with `SNIPE_V2` (default on).
+
+  v2 was ~21% of live buy traffic in the sampled blocks (11 of 52), so this was
+  not a marginal path.
+
 ### Not built yet
 - **Shredstream detection** (`M3`) — the only route to block 0. Geyser at
   processed commitment delivers a create *after* its block is built, so block 1
   is the floor with geyser alone. `carbon-jito-shredstream-grpc-datasource` is
   already in the workspace.
-- **`create_v2` / `BuyV2`** — quote-mint launches are currently logged and
-  skipped. Matters if watched creators launch via v2 (`Global.create_v2_enabled`).
+- **`buy_v2`** (exact-tokens-out) — only the exact-quote-in variant is built,
+  which is what a sniper wants. Add if a fixed token count is ever needed.
+- **Differential simulation for v2** — VERIFICATION.md §3.3 was run for v1 but
+  not repeated for v2; the v2 layout rests on IDL + three reproduced mainnet
+  buys. Worth running on the box before scaling v2 size.
 - **Exit tracker (phase 2)** — no position tracking or auto-sell. Port the old
   branches' order book onto `CpiEvent::TradeEvent`.
 - **Ops** — systemd unit, latency probe, metrics.

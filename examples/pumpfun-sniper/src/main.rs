@@ -82,9 +82,9 @@ pub async fn main() -> CarbonResult<()> {
         .map_err(|e| Error::Custom(format!("failed to fetch pump global account: {e}")))?;
     let global = Global::decode(&global_account.data)
         .ok_or_else(|| Error::Custom("failed to decode pump global account".into()))?;
-    if global.create_v2_enabled {
+    if global.create_v2_enabled && !cfg.snipe_v2 {
         log::warn!(
-            "pump global has create_v2_enabled — coins launched via create_v2 will be logged and skipped (v1 buys only)"
+            "pump global has create_v2_enabled but SNIPE_V2 is off — create_v2 launches will be logged and skipped"
         );
     }
 
@@ -103,6 +103,17 @@ pub async fn main() -> CarbonResult<()> {
         protocol_fee_bps: global.fee_basis_points,
         creator_fee_bps: global.creator_fee_basis_points,
     };
+    // v2 coins price against the quote reserve. The curve arithmetic is the
+    // same constant product; only the opening reserve differs.
+    let initial_curve_v2 = CurveState {
+        virtual_sol_reserves: global.initial_virtual_quote_reserves,
+        ..initial_curve
+    };
+    if cfg.snipe_v2 && global.initial_virtual_quote_reserves == 0 {
+        log::warn!(
+            "SNIPE_V2 is on but Global.initial_virtual_quote_reserves is 0 — v2 quotes would be meaningless; v2 launches will be skipped"
+        );
+    }
     // Take the buyback fee recipients from the live Global account rather than
     // the compiled-in snapshot: `update_buyback_config` can rotate them, and a
     // stale list fails every buy with BuybackFeeRecipientNotAuthorized (6057).
@@ -150,6 +161,7 @@ pub async fn main() -> CarbonResult<()> {
         Arc::clone(&blockhash),
         Arc::clone(&statics),
         initial_curve,
+        initial_curve_v2,
     );
     tokio::spawn(dispatcher.run(signal_rx));
 

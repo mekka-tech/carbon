@@ -453,3 +453,107 @@ Ordered by risk.
    *we* still build what we intended, not that the program still wants it. §3.2
    and §3.3 are the only defence against an upgrade, and should be re-run before
    any live session.
+
+---
+
+## 5. `create_v2` / `buy_exact_quote_in_v2` — verified 2026-07-29
+
+Added when v2 support landed. Same method as §1: on-chain Anchor IDL for the
+declared layout, then real successful mainnet buys to catch what the IDL omits.
+
+### 5.1 The IDL layout is the real layout (unlike v1)
+
+`buy_exact_quote_in_v2` declares **27 accounts**, discriminator
+`[194, 171, 28, 70, 104, 77, 91, 47]`, args
+`(spendable_quote_in: u64, min_tokens_out: u64)` — no `track_volume`.
+
+Sampling 8 consecutive finalized blocks gave 11 v2 buys against 41 v1 buys, so
+v2 is roughly a fifth of live buy traffic and cannot be ignored:
+
+| Instruction | count | account counts observed |
+|---|---|---|
+| `buy` (v1) | 41 | `{18: 41}` |
+| `buy_v2` | 6 | `{27: 6}` |
+| `buy_exact_quote_in_v2` | 5 | `{27: 4, 28: 1}` |
+
+**All 27 derived addresses matched the real instructions account-for-account**,
+across three independently sampled buys — every PDA seed below was confirmed,
+not assumed:
+
+| Account | Derivation |
+|---|---|
+| `associated_quote_fee_recipient` | ATA(`fee_recipient`, quote_token_program, quote_mint) |
+| `associated_quote_buyback_fee_recipient` | ATA(`buyback_fee_recipient`, …) |
+| `associated_base_bonding_curve` | ATA(`bonding_curve`, **base**_token_program, base_mint) |
+| `associated_quote_bonding_curve` | ATA(`bonding_curve`, **quote**_token_program, quote_mint) |
+| `associated_base_user` / `associated_quote_user` | ATA(`user`, respective program+mint) |
+| `associated_creator_vault` | ATA(`creator_vault`, quote_token_program, quote_mint) |
+| `sharing_config` | `["sharing-config", base_mint]` on the **fee** program |
+| `associated_user_volume_accumulator` | ATA(`user_volume_accumulator`, quote…) |
+
+### 5.2 The 28th account is optional — and why
+
+One of the five carried a 28th account: `bonding_curve_v2`,
+`["bonding-curve-v2", base_mint]` on pump, read-only. The other four succeeded
+without it.
+
+This is the **opposite** of v1, where omitting the trailing accounts fails every
+buy (§1.3), and the reason is structural: in v1 the *buyback fee recipient* hides
+in `remaining_accounts[1]`, so a short account list leaves the program with no
+recipient (`BuybackFeeRecipientMissing`, 6062). v2 promotes
+`buyback_fee_recipient` to a **named** account at index 8, so nothing is missing
+when the trailing account is dropped.
+
+Checked directly: for all three sampled mints — including the one whose buy
+*did* pass the account — the `bonding_curve_v2` PDA is **absent on-chain** on
+both pump and mayhem. So its presence is not gated on the account existing.
+
+The builder therefore sends the lean 27-account form by default and appends
+`bonding_curve_v2` only for `is_mayhem_mode` coins, derived on the mayhem
+program. Pinned by `mayhem_mode_appends_the_optional_bonding_curve_v2`.
+
+### 5.3 Token programs differ across the two legs
+
+v2 splits the token program in two, and mixing them up changes the ATA
+addresses and fails with `ConstraintAssociatedTokenTokenProgram` (2023):
+
+* `base_token_program` = **Token-2022** (`create_v2` hardcodes it in the IDL)
+* `quote_token_program` = **SPL Token** (WSOL is a classic SPL mint)
+
+Confirmed in traffic: one sampled v2 buy had an SPL-Token *base* mint (a v1-era
+coin bought through the v2 instruction), so the base program is genuinely a
+per-coin property and not a constant. `CoinAccountsV2` carries both as fields.
+
+### 5.4 The quote leg has to be wrapped
+
+`spendable_quote_in` is denominated in the **quote token**, not lamports, and is
+debited from `associated_quote_user`. A buyer holding only native SOL fills
+nothing. Each v2 buy therefore prepends: create WSOL ATA (idempotent) → system
+transfer → `sync_native` → create the Token-2022 base ATA; and optionally
+appends `close_account` to reclaim the remainder and the rent
+(`UNWRAP_AFTER_BUY`).
+
+### 5.5 Fixture
+
+`R7KYFa4pwDxfEwWKGVkCxWXd3MYvrtFBtGzyxDqYABnhTybBpZRfz8iPNBSG6JBRyn2XGxaHS6gQibqLbnSgFZE`
+(slot 435907747) — top-level `buy_exact_quote_in_v2`, Token-2022 base against
+WSOL, 27 accounts, 24 data bytes, `spendable_quote_in = 1_000_000`,
+`min_tokens_out = 1`. Encoded in `V2_FIXTURE_ACCOUNTS` / `V2_FIXTURE_FLAGS`.
+
+Flag caveat, same as §1.4: index 19 `global_volume_accumulator` reads back
+*writable* at message level, but that is the union over the whole transaction.
+The IDL declares it read-only and we send it read-only, matching v1.
+
+### 5.6 What is still unverified for v2
+
+1. **No differential simulation was run for v2.** §1.3's strongest check
+   (replay a real buy, mutate one thing, simulate) was not repeated here — the
+   27-account layout rests on it matching the IDL *and* reproducing three real
+   successful buys exactly. Run §3.3 against a v2 buy before scaling size.
+2. **`buy_v2` (exact-tokens-out) is not built.** Only
+   `buy_exact_quote_in_v2` is, since a sniper wants exact spend.
+3. **Quote math for v2 reuses the v1 constant-product formula** with
+   `Global.initial_virtual_quote_reserves` as the opening reserve. That matches
+   the shape of the v1 curve but was not verified against a v2 fill; treat
+   `min_tokens_out` as approximate and lean on `SLIPPAGE_BPS` for the first runs.
+4. **Cashback / `is_cashback_enabled` is ignored**, as is `claim_cashback_v2`.

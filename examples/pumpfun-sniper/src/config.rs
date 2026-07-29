@@ -49,6 +49,16 @@ pub struct Config {
     pub slippage_bps: u64,
     pub track_volume: bool,
 
+    /// Snipe `create_v2` launches as well as `create` ones. v2 coins are
+    /// Token-2022 and trade against a quote mint, so each buy also has to wrap
+    /// SOL — a heavier transaction than a v1 buy. Off leaves v2 launches logged
+    /// and skipped, which is the pre-v2 behaviour.
+    pub snipe_v2: bool,
+    /// Close the buyer's wrapped-SOL account in the same transaction as a v2
+    /// buy, returning unspent WSOL and the account rent. Costs one instruction;
+    /// leaving it off keeps the ATA around for the next buy.
+    pub unwrap_after_buy: bool,
+
     pub min_creator_balance_lamports: u64,
     pub max_creator_buy_lamports: u64,
     pub max_positions: usize,
@@ -136,6 +146,8 @@ impl Config {
             buyers,
             slippage_bps: num_env("SLIPPAGE_BPS", 500)?,
             track_volume: env::var("TRACK_VOLUME").is_ok_and(|v| v == "true"),
+            snipe_v2: bool_env("SNIPE_V2", true),
+            unwrap_after_buy: bool_env("UNWRAP_AFTER_BUY", true),
             min_creator_balance_lamports: sol_env("MIN_CREATOR_BALANCE_SOL", 0.0)?,
             max_creator_buy_lamports: sol_env("MAX_CREATOR_BUY_SOL", 5.0)?,
             max_positions: num_env("MAX_POSITIONS", 5)? as usize,
@@ -161,6 +173,15 @@ impl Config {
             tpu_leaders_ahead: num_env("TPU_LEADERS_AHEAD", 2)?,
             funding_buffer_lamports: sol_env("FUNDING_BUFFER_SOL", 0.01)?,
         })
+    }
+}
+
+/// Boolean env var with an explicit default, so a flag can default to on and
+/// still be switched off with `=false`.
+fn bool_env(key: &str, default: bool) -> bool {
+    match env::var(key) {
+        Ok(v) => matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"),
+        Err(_) => default,
     }
 }
 

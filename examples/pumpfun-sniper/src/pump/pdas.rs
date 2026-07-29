@@ -7,14 +7,25 @@ pub const FEE_PROGRAM_ID: Pubkey =
 pub const TOKEN_PROGRAM_ID: Pubkey =
     Pubkey::from_str_const("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 /// Token-2022. Coins launched through `create_v2` are minted here; coins
-/// launched through `create` (the only ones this sniper reacts to) use
-/// [`TOKEN_PROGRAM_ID`]. Both addresses are hardcoded in the respective pump
-/// instructions in the on-chain IDL.
-#[allow(dead_code)] // used by tests and by any future create_v2 support
+/// launched through `create` use [`TOKEN_PROGRAM_ID`]. Both addresses are
+/// hardcoded in the respective pump instructions in the on-chain IDL, which is
+/// why the buy builders take the token program as a field rather than assuming
+/// one.
 pub const TOKEN_2022_PROGRAM_ID: Pubkey =
     Pubkey::from_str_const("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 pub const ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey =
     Pubkey::from_str_const("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+
+/// Wrapped SOL. `create_v2` coins trade against a *quote mint* rather than
+/// native lamports, and `Global.whitelisted_quote_mints` currently contains
+/// only this one. A v2 buy therefore spends SPL tokens out of the buyer's WSOL
+/// account, not lamports off the buyer directly.
+pub const WSOL_MINT: Pubkey = Pubkey::from_str_const("So11111111111111111111111111111111111111112");
+
+/// The "mayhem" program. `create_v2` routes several of its accounts here, and
+/// mayhem-mode coins derive `bonding_curve_v2` on this program instead of pump.
+pub const MAYHEM_PROGRAM_ID: Pubkey =
+    Pubkey::from_str_const("MAyhSmzXzV1pTf7LsNkrNwkWKTo4ougAJ1PPg47MD4e");
 
 /// `Global.buyback_fee_recipients` as read from mainnet on 2026-07-29.
 ///
@@ -82,10 +93,23 @@ pub fn bonding_curve(mint: &Pubkey) -> Pubkey {
 /// (the program reads it out of `remaining_accounts`), but omitting it or
 /// passing the wrong address fails with `InvalidBondingCurveV2` (6074).
 ///
-/// Note: coins in "mayhem mode" derive this on the mayhem program instead. The
-/// sniper only buys plain `create` coins, which always use the pump program.
+/// Note: coins in "mayhem mode" derive this on the mayhem program instead —
+/// see [`bonding_curve_v2_mayhem`].
 pub fn bonding_curve_v2(mint: &Pubkey) -> Pubkey {
     Pubkey::find_program_address(&[b"bonding-curve-v2", mint.as_ref()], &PUMPFUN_PROGRAM_ID).0
+}
+
+/// `bonding_curve_v2` as derived for a mayhem-mode coin, i.e. on the mayhem
+/// program rather than pump. `create_v2` sets `is_mayhem_mode` per coin, so the
+/// v2 builder picks between this and [`bonding_curve_v2`].
+pub fn bonding_curve_v2_mayhem(mint: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"bonding-curve-v2", mint.as_ref()], &MAYHEM_PROGRAM_ID).0
+}
+
+/// `sharing-config` for a v2 coin. Lives on the *fee* program, seeded with the
+/// base mint — index 18 of `buy_exact_quote_in_v2`, read-only.
+pub fn sharing_config(base_mint: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"sharing-config", base_mint.as_ref()], &FEE_PROGRAM_ID).0
 }
 
 /// Standard associated-token-account derivation for the classic SPL token

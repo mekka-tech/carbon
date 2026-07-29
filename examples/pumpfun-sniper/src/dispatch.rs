@@ -1,9 +1,9 @@
 use {
     crate::{
         config::{Buyer, Config, SendPath},
-        processor::SnipeSignal,
+        processor::{Launch, SnipeSignal},
         pump::{
-            instructions::{self, CoinAccounts, StaticAccounts},
+            instructions::{self, CoinAccounts, CoinAccountsV2, StaticAccounts},
             quote::{self, CurveState},
         },
         sender::{fast::FastSenderPool, jito, rpc::RpcPool, tpu::TpuSender},
@@ -26,9 +26,14 @@ pub struct BuyDispatcher {
     blockhash: Arc<RwLock<Hash>>,
     statics: Arc<StaticAccounts>,
     initial_curve: CurveState,
+    /// v2 curves open against `Global.initial_virtual_quote_reserves` rather
+    /// than the native-SOL reserve, so the two flows quote off different
+    /// starting states.
+    initial_curve_v2: CurveState,
 }
 
 impl BuyDispatcher {
+    #[allow(clippy::too_many_arguments)] // wiring constructor, all of it needed
     pub fn new(
         cfg: Arc<Config>,
         rpc: Arc<RpcPool>,
@@ -37,6 +42,7 @@ impl BuyDispatcher {
         blockhash: Arc<RwLock<Hash>>,
         statics: Arc<StaticAccounts>,
         initial_curve: CurveState,
+        initial_curve_v2: CurveState,
     ) -> Self {
         Self {
             cfg,
@@ -46,6 +52,7 @@ impl BuyDispatcher {
             blockhash,
             statics,
             initial_curve,
+            initial_curve_v2,
         }
     }
 
@@ -56,12 +63,23 @@ impl BuyDispatcher {
     }
 
     async fn dispatch(&self, signal: &SnipeSignal) {
-        let coin = Arc::new(CoinAccounts::new(
-            signal.mint,
-            signal.bonding_curve,
-            signal.associated_bonding_curve,
-            &signal.creator,
-        ));
+        // v1 and v2 coins need different account sets and different buy
+        // instructions; build whichever this launch calls for once, then share
+        // it across every buyer.
+        let coin = Arc::new(match signal.launch {
+            Launch::V1 => Coin::V1(CoinAccounts::new(
+                signal.mint,
+                signal.bonding_curve,
+                signal.associated_bonding_curve,
+                &signal.creator,
+            )),
+            Launch::V2 { mayhem } => Coin::V2(CoinAccountsV2::new(
+                signal.mint,
+                signal.bonding_curve,
+                &signal.creator,
+                mayhem,
+            )),
+        });
         let blockhash = *self.blockhash.read().await;
 
         // Build and sign all buys in parallel — with 30 wallets, signing
@@ -73,7 +91,11 @@ impl BuyDispatcher {
                 let cfg = Arc::clone(&self.cfg);
                 let statics = Arc::clone(&self.statics);
                 let coin = Arc::clone(&coin);
-                let curve = self.initial_curve;
+                let curve = if signal.launch.is_v2() {
+                    self.initial_curve_v2
+                } else {
+                    self.initial_curve
+                };
                 let dev_buy = signal.dev_buy_lamports;
                 // Jito bundles cap at 5 txs, so 30 buys become 6 bundles; the
                 // tip rides on the last transaction of each bundle.
@@ -162,11 +184,17 @@ impl BuyDispatcher {
     }
 }
 
+/// The per-coin accounts for whichever launch flow created this coin.
+pub enum Coin {
+    V1(CoinAccounts),
+    V2(CoinAccountsV2),
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_buy_tx(
     cfg: &Config,
     statics: &StaticAccounts,
-    coin: &CoinAccounts,
+    coin: &Coin,
     buyer: &Buyer,
     curve: &CurveState,
     dev_buy_lamports: u64,
@@ -184,16 +212,59 @@ fn build_buy_tx(
     let mut ixs: Vec<Instruction> = vec![
         ComputeBudgetInstruction::set_compute_unit_limit(cfg.compute_unit_limit),
         ComputeBudgetInstruction::set_compute_unit_price(buyer.priority_fee_micro_lamports),
-        instructions::create_ata_idempotent(&buyer_pk, &buyer_pk, &coin.mint),
-        instructions::buy_exact_sol_in(
-            statics,
-            coin,
-            &buyer_pk,
-            buyer.buy_amount_lamports,
-            min_tokens_out,
-            cfg.track_volume,
-        ),
     ];
+    match coin {
+        Coin::V1(coin) => ixs.extend([
+            instructions::create_ata_idempotent(&buyer_pk, &buyer_pk, &coin.mint),
+            instructions::buy_exact_sol_in(
+                statics,
+                coin,
+                &buyer_pk,
+                buyer.buy_amount_lamports,
+                min_tokens_out,
+                cfg.track_volume,
+            ),
+        ]),
+        // A v2 buy spends *quote tokens*, so the lamports have to be wrapped
+        // first: create the WSOL account, fund it, sync it so the program can
+        // see the balance, then buy. The base ATA is Token-2022.
+        Coin::V2(coin) => {
+            let quote_ata = coin.quote_ata(&buyer_pk);
+            ixs.extend([
+                instructions::create_ata_idempotent_with_program(
+                    &buyer_pk,
+                    &buyer_pk,
+                    &coin.quote_mint,
+                    &coin.quote_token_program,
+                ),
+                solana_system_interface::instruction::transfer(
+                    &buyer_pk,
+                    &quote_ata,
+                    buyer.buy_amount_lamports,
+                ),
+                instructions::sync_native(&quote_ata),
+                instructions::create_ata_idempotent_with_program(
+                    &buyer_pk,
+                    &buyer_pk,
+                    &coin.base_mint,
+                    &coin.base_token_program,
+                ),
+                instructions::buy_exact_quote_in_v2(
+                    statics,
+                    coin,
+                    &buyer_pk,
+                    buyer.buy_amount_lamports,
+                    min_tokens_out,
+                ),
+            ]);
+            // Reclaim whatever the curve did not take, plus the account rent.
+            if cfg.unwrap_after_buy {
+                ixs.push(instructions::close_account(
+                    &quote_ata, &buyer_pk, &buyer_pk,
+                ));
+            }
+        }
+    }
     // A fast-provider tip is part of the transaction, so it is baked in for the
     // provider this wallet was dealt. The same transaction still goes out over
     // plain RPC too — the tip only costs anything if this transaction is the

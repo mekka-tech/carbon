@@ -25,13 +25,26 @@ Solana slots are ~400 ms. What "block 0 / block 1" actually costs:
   priority fee before that leader's slot ends. Total pipeline budget ~300 ms.
   This is the standard, dependable sniper target and what the design centers
   on.
-- **Block 0 (same block as the create) — best-effort only.** Requires seeing
-  the create *before the producing leader finishes the block* and getting our
-  tx back to that same leader in time — a window of tens of ms. Only feasible
-  with **shred-level detection** (Jito shredstream or constant-k's shred
-  injection / pre-execution fast path), and even then it's racy, never
-  guaranteed. Geyser "processed" delivers the create only *after* block N is
-  built, so with geyser alone block 0 is impossible and block 1 is the floor.
+- **Block 0 (same block as the create) — best-effort, and provider-dependent.**
+  Requires seeing the create *before the producing leader finishes the block*
+  and getting our tx back to that same leader in time — a window of tens of ms.
+
+  The subscription already runs at **`CommitmentLevel::Processed`** (see
+  `main.rs`), which is the precondition: `confirmed`/`finalized` would deliver
+  the create only well after block N is sealed, making block 0 structurally
+  impossible. At `processed`, whether block 0 is reachable comes down to *when
+  the provider emits* — a geyser plugin that streams transaction updates as the
+  validator executes them can surface the create mid-block, while one that
+  flushes on block boundaries cannot. Providers differ, and some that advertise
+  `processed` still emit per completed block.
+
+  So: treat block 1 as the dependable floor and block 0 as upside that depends
+  on the feed. Measure it rather than assuming either way — log the delta
+  between the create's slot and the slot our fills land in, and compare feeds.
+  **Shred-level detection** (Jito shredstream, or constant-k's shred injection
+  / pre-execution fast path) removes the dependency entirely by reading partial
+  shreds before the block is assembled, which is why it stays on the roadmap
+  regardless.
 
 So: detection latency is the whole game. The send path decides how many of the
 30 land in block 1 vs slip to block 2+.
