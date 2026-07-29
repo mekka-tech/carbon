@@ -7021,7 +7021,6 @@ dependencies = [
  "log",
  "reqwest 0.12.28",
  "rustls 0.23.35",
- "serde",
  "serde_json",
  "solana-client",
  "solana-commitment-config",

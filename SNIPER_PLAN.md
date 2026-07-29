@@ -13,16 +13,16 @@ Three outdated branches implement versions of this, all based on a ~Feb–Apr 20
 fork of carbon with **no merge base** with current `main` (rebase is not viable):
 
 - **`sniper-all-tokens`** (newest, Apr 2025) and **`test/1`** — the sniper:
-  - `examples/alerts/src/pumpfun/pumpfun_new_tokens.rs`: a carbon
-    `Processor` on `PumpfunInstruction::Create` that filtered creators by
-    pre/post SOL balance (`MIN_CREATOR_BALANCE`, `MAX_CREATOR_BUY`), a creator
-    blacklist, and a max-concurrent-positions counter, then pushed a JSON
-    `SwapOrder` over a local WebSocket (`ws://localhost:3012`).
-  - `swap/` (TypeScript): WebSocket server that received orders and built the
-    pump.fun buy/sell transactions by hand (hardcoded discriminators, 12-account
-    key list), sent via Jito bundles or RPC, with order book, PnL tracking,
-    stop-loss/take-profit, balance guard, Discord webhooks.
-  - `PumpfunInstruction::TradeEvent` was used for position tracking / exits.
+    - `examples/alerts/src/pumpfun/pumpfun_new_tokens.rs`: a carbon
+      `Processor` on `PumpfunInstruction::Create` that filtered creators by
+      pre/post SOL balance (`MIN_CREATOR_BALANCE`, `MAX_CREATOR_BUY`), a creator
+      blacklist, and a max-concurrent-positions counter, then pushed a JSON
+      `SwapOrder` over a local WebSocket (`ws://localhost:3012`).
+    - `swap/` (TypeScript): WebSocket server that received orders and built the
+      pump.fun buy/sell transactions by hand (hardcoded discriminators, 12-account
+      key list), sent via Jito bundles or RPC, with order book, PnL tracking,
+      stop-loss/take-profit, balance guard, Discord webhooks.
+    - `PumpfunInstruction::TradeEvent` was used for position tracking / exits.
 - **`feature/ben`** — earlier iteration, order book + PnL only, no `swap/`.
 
 ## Why it can't be reused as-is
@@ -35,19 +35,19 @@ fork of carbon with **no merge base** with current `main` (rebase is not viable)
    `examples/yellowstone-grpc/src/main.rs` and its `variants.rs`).
 2. **The pump.fun program changed a lot.** The old decoder had 10 instruction
    variants; the current one has ~40. Since then pump.fun added:
-   - **Creator fees** — `Buy` now requires a `creator_vault` PDA (derived from
-     the bonding-curve creator).
-   - **Volume accumulators** — `global_volume_accumulator` +
-     `user_volume_accumulator` accounts on `Buy`, and a `track_volume: OptionBool`
-     arg appended to buy data.
-   - **Fee config/program** — `fee_config` + `fee_program` accounts on `Buy`
-     (16 accounts total now vs 12 in the old TS builder).
-   - **`create_v2` / `buy_v2` / `sell_v2`** — quote-mint-generalized flow
-     (WSOL as quote token, cashback, mayhem mode, buyback fee recipients).
-     `Global.create_v2_enabled` gates it; new coins are created via `CreateV2`
-     when enabled, so listening only for legacy `Create` misses coins.
-   - Events are now emitted through a single `CpiEvent` variant
-     (`CreateEvent`, `TradeEvent`, … nested inside), not top-level variants.
+    - **Creator fees** — `Buy` now requires a `creator_vault` PDA (derived from
+      the bonding-curve creator).
+    - **Volume accumulators** — `global_volume_accumulator` +
+      `user_volume_accumulator` accounts on `Buy`, and a `track_volume: OptionBool`
+      arg appended to buy data.
+    - **Fee config/program** — `fee_config` + `fee_program` accounts on `Buy`
+      (16 accounts total now vs 12 in the old TS builder).
+    - **`create_v2` / `buy_v2` / `sell_v2`** — quote-mint-generalized flow
+      (WSOL as quote token, cashback, mayhem mode, buyback fee recipients).
+      `Global.create_v2_enabled` gates it; new coins are created via `CreateV2`
+      when enabled, so listening only for legacy `Create` misses coins.
+    - Events are now emitted through a single `CpiEvent` variant
+      (`CreateEvent`, `TradeEvent`, … nested inside), not top-level variants.
 3. **The old TS builder is broken on-chain today** (missing creator_vault /
    volume accumulator / fee accounts, stale discriminator usage) — this is why
    "pumpfun has changed a lot" bites: buys would fail immediately.
@@ -124,10 +124,10 @@ examples/pumpfun-sniper/
 - Creator matching: `HashSet<Pubkey>` of watched wallets from config, checked
   against the create instruction's `user`/`creator` account **and** fee payer.
   Keep the old guards (they were the actual edge of the old bot):
-  - creator pre-balance ≥ `MIN_CREATOR_BALANCE`
-  - creator's own dev-buy ≤ `MAX_CREATOR_BUY` (pre/post balance diff)
-  - blacklist, max open positions, and a **tx-age gate** (skip if
-    `now - block_time > TIME_DIFF_PERMITTED`, as the TS side did).
+    - creator pre-balance ≥ `MIN_CREATOR_BALANCE`
+    - creator's own dev-buy ≤ `MAX_CREATOR_BUY` (pre/post balance diff)
+    - blacklist, max open positions, and a **tx-age gate** (skip if
+      `now - block_time > TIME_DIFF_PERMITTED`, as the TS side did).
 
 ### 2. Buy transaction (the part that must be rewritten)
 
@@ -165,10 +165,10 @@ hot path**:
   `JITO_TIP`.
 - Each buyer gets its own tx (own blockhash-signed v0 message, compute-budget
   ixs + optional Jito tip ix). Dispatch strategies (config flag):
-  - `jito-bundle`: all N txs in one bundle (atomic, lands together), tip on
-    the last tx.
-  - `rpc-spray`: independent `send_transaction` with `skip_preflight=true`
-    to one or more RPC urls.
+    - `jito-bundle`: all N txs in one bundle (atomic, lands together), tip on
+      the last tx.
+    - `rpc-spray`: independent `send_transaction` with `skip_preflight=true`
+      to one or more RPC urls.
 - Blockhash kept warm by a background refresher task (poll every ~400ms) so the
   hot path never awaits an RPC.
 - Per-mint dedup (the old `alreadySwappedBuy` list) + global position counter.

@@ -15,8 +15,9 @@ impl CurveState {
     pub fn tokens_out_for_sol(&self, spendable_sol_in: u64) -> u64 {
         let total_fee_bps = self.protocol_fee_bps + self.creator_fee_bps;
         let mut net_sol = (spendable_sol_in as u128) * 10_000 / (10_000 + total_fee_bps as u128);
-        let fees = div_ceil(net_sol * self.protocol_fee_bps as u128, 10_000)
-            + div_ceil(net_sol * self.creator_fee_bps as u128, 10_000);
+        // Each fee rounds up independently, matching the program.
+        let fees = (net_sol * self.protocol_fee_bps as u128).div_ceil(10_000)
+            + (net_sol * self.creator_fee_bps as u128).div_ceil(10_000);
         if net_sol + fees > spendable_sol_in as u128 {
             net_sol -= net_sol + fees - spendable_sol_in as u128;
         }
@@ -41,10 +42,6 @@ impl CurveState {
             ..*self
         }
     }
-}
-
-fn div_ceil(a: u128, b: u128) -> u128 {
-    (a + b - 1) / b
 }
 
 /// `min_tokens_out` for a buy of `spendable_sol_in`, assuming up to

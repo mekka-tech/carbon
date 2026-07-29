@@ -23,18 +23,19 @@ TypeScript swap service. Those branches share **no merge base** with current
 
 ## 2. Read these, in order
 
-| Doc | What's in it |
-|---|---|
-| `SNIPER_PLAN.md` (repo root) | Architecture, why the old branches are dead, milestones |
-| `examples/pumpfun-sniper/DISPATCH_PLAN.md` | The 30-wallet fanout design + locked decisions |
-| `examples/pumpfun-sniper/PROVIDERS.md` | Verified endpoints, tip accounts, minimums, rate limits |
-| `examples/pumpfun-sniper/VERIFICATION.md` | What's verified vs assumed about the buy instruction |
-| `examples/pumpfun-sniper/README.md` | How to run it |
-| `examples/pumpfun-sniper/.env.example` | Every config knob, documented |
+| Doc                                        | What's in it                                            |
+| ------------------------------------------ | ------------------------------------------------------- |
+| `SNIPER_PLAN.md` (repo root)               | Architecture, why the old branches are dead, milestones |
+| `examples/pumpfun-sniper/DISPATCH_PLAN.md` | The 30-wallet fanout design + locked decisions          |
+| `examples/pumpfun-sniper/PROVIDERS.md`     | Verified endpoints, tip accounts, minimums, rate limits |
+| `examples/pumpfun-sniper/VERIFICATION.md`  | What's verified vs assumed about the buy instruction    |
+| `examples/pumpfun-sniper/README.md`        | How to run it                                           |
+| `examples/pumpfun-sniper/.env.example`     | Every config knob, documented                           |
 
 ## 3. Current state
 
 ### Working and tested
+
 - **Listener** — carbon pipeline on pump.fun `Create`, filtered to watched
   creator wallets, with the legacy bot's guards ported: creator blacklist,
   min creator balance, max creator dev-buy, per-mint dedup, max open
@@ -62,11 +63,11 @@ TypeScript swap service. Those branches share **no merge base** with current
   previous target set". 11 unit tests cover the leader arithmetic and socket
   resolution. Enable with `SEND_PATHS=…,tpu`.
 
-  Two constants worth knowing about if it misbehaves: the connection pool is
-  pinned to **1** (the cache picks a random pool member per send, so a larger
-  pool could hand you an unwarmed connection), and there's a per-leader
-  **400 ms send timeout** (QUIC gives no application ack, so a black-holed peer
-  would otherwise stall the dispatcher past the slot being raced for).
+    Two constants worth knowing about if it misbehaves: the connection pool is
+    pinned to **1** (the cache picks a random pool member per send, so a larger
+    pool could hand you an unwarmed connection), and there's a per-leader
+    **400 ms send timeout** (QUIC gives no application ack, so a black-holed peer
+    would otherwise stall the dispatcher past the slot being raced for).
 
 - **Buy instruction verified against mainnet.** The audit pulled pump.fun's
   on-chain Anchor IDL and 49 real successful buys, then used differential
@@ -75,40 +76,42 @@ TypeScript swap service. Those branches share **no merge base** with current
   every live buy would have failed with `BuybackFeeRecipientMissing` (6062).
   The two extra accounts come from `remaining_accounts` and appear in neither
   the IDL nor the Codama decoder:
-  - `remaining[0]` = `bonding_curve_v2`, PDA `["bonding-curve-v2", mint]`,
-    read-only. Wrong address => `InvalidBondingCurveV2` (6074).
-  - `remaining[1]` = one of `Global.buyback_fee_recipients`, **writable**.
-    Read-only => `PrivilegeEscalation`; outside the set =>
-    `BuybackFeeRecipientNotAuthorized` (6057).
+    - `remaining[0]` = `bonding_curve_v2`, PDA `["bonding-curve-v2", mint]`,
+      read-only. Wrong address => `InvalidBondingCurveV2` (6074).
+    - `remaining[1]` = one of `Global.buyback_fee_recipients`, **writable**.
+      Read-only => `PrivilegeEscalation`; outside the set =>
+      `BuybackFeeRecipientNotAuthorized` (6057).
 
-  Also fixed: `global_volume_accumulator` was writable (IDL says read-only, and
-  a write lock there serialises us against every other pump buyer in the slot),
-  and the token program is now a field rather than a hardcode. See
-  `VERIFICATION.md` for the evidence and transaction signatures.
-
-### In flight when this session ended
-Nothing — both subagents completed and their work is committed.
+    Also fixed: `global_volume_accumulator` was writable (IDL says read-only, and
+    a write lock there serialises us against every other pump buyer in the slot),
+    and the token program is now a field rather than a hardcode. See
+    `VERIFICATION.md` for the evidence and transaction signatures.
 
 - **`create_v2` launches are sniped too.** `CreateV2` now produces a snipe
   signal like `Create`, and the dispatcher builds `buy_exact_quote_in_v2`
   (27 accounts) instead of `buy_exact_sol_in`. v2 coins are Token-2022 and
-  trade against a *quote mint* (WSOL), so each v2 buy also wraps SOL —
+  trade against a _quote mint_ (WSOL), so each v2 buy also wraps SOL —
   create WSOL ATA → transfer → `sync_native` → create the Token-2022 ATA → buy,
   with an optional `close_account` to unwrap the remainder.
 
-  Verified against mainnet the same way v1 was: all 27 derived addresses
-  matched three real successful buys account-for-account. Unlike v1, the
-  trailing `bonding_curve_v2` is **optional** here — v2 promotes
-  `buyback_fee_recipient` to a named account, so a 27-account buy is complete.
-  It is appended only for `is_mayhem_mode` coins, on the mayhem program.
-  See VERIFICATION.md §5. Toggle with `SNIPE_V2` (default on).
+    Verified against mainnet the same way v1 was: all 27 derived addresses
+    matched three real successful buys account-for-account. Unlike v1, the
+    trailing `bonding_curve_v2` is **optional** here — v2 promotes
+    `buyback_fee_recipient` to a named account, so a 27-account buy is complete.
+    It is appended only for `is_mayhem_mode` coins, on the mayhem program.
+    See VERIFICATION.md §5. Toggle with `SNIPE_V2` (default on).
 
-  v2 was ~21% of live buy traffic in the sampled blocks (11 of 52), so this was
-  not a marginal path.
+    v2 was ~21% of live buy traffic in the sampled blocks (11 of 52), so this was
+    not a marginal path.
+
+### In flight when this session ended
+
+Nothing — both subagents completed and their work is committed.
 
 ### Not built yet
+
 - **Shredstream detection** (`M3`) — the only route to block 0. Geyser at
-  processed commitment delivers a create *after* its block is built, so block 1
+  processed commitment delivers a create _after_ its block is built, so block 1
   is the floor with geyser alone. `carbon-jito-shredstream-grpc-datasource` is
   already in the workspace.
 - **`buy_v2`** (exact-tokens-out) — only the exact-quote-in variant is built,
@@ -120,34 +123,26 @@ Nothing — both subagents completed and their work is committed.
   branches' order book onto `CpiEvent::TradeEvent`.
 - **Ops** — systemd unit, latency probe, metrics.
 
-## 4. Blocked: repo access
+## 4. Repo access — resolved
 
-`git push` fails with **403**, and so does the GitHub API with the session's
-provisioned `GITHUB_TOKEN`:
+Both blockers from the original session are cleared:
 
-```
-$ curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/repos/mekka-tech/carbon
-403
-```
+- **Push works.** The branch is on `origin` at
+  `claude/pumpfun-coin-sniper-mvwiwh`, and **PR
+  [#1](https://github.com/mekka-tech/carbon/pull/1)** is open as a draft. The
+  git bundle is no longer the only copy.
+- **`ID_RSA` / `SERVER_IP` are visible** to the session.
 
-This is a genuine authorization restriction — the Claude GitHub App is not
-enabled for `mekka-tech/carbon` — not a network problem (github.com itself
-returns 200). **No PR could be created.**
+One limitation remains, and it is architectural rather than a permission:
+a sandboxed agent session reaches the internet through an HTTP(S) egress proxy,
+which cannot carry **raw TCP (SSH, port 22)** or **gRPC/HTTP-2**. Yellowstone
+geyser is gRPC, so the sniper cannot be _run_ from such a session at all,
+whatever the session's network-access setting says — that setting governs which
+domains are reachable, not which protocols. Plain JSON-RPC over 443 does work,
+which is how the mainnet verification in `VERIFICATION.md` was done.
 
-To fix: an admin grants the Claude GitHub App access to the repo (GitHub →
-Settings → Applications → Claude, or the Claude admin settings page). Once
-granted, `git push -u origin claude/pumpfun-coin-sniper-mvwiwh` should work and
-a PR can be opened with the body in section 7.
-
-Until then the commits exist **only** in the session container and in the git
-bundle that was sent to the user. Restore with:
-
-```sh
-git clone pumpfun-sniper.bundle -b claude/pumpfun-coin-sniper-mvwiwh
-# or into an existing clone:
-git fetch /path/to/pumpfun-sniper.bundle \
-  claude/pumpfun-coin-sniper-mvwiwh:claude/pumpfun-coin-sniper-mvwiwh
-```
+Practical consequence: **deployment is always operator-driven.** Use
+`examples/pumpfun-sniper/deploy.sh` from a machine that can SSH to the box.
 
 ## 5. Deployment target
 
@@ -158,6 +153,7 @@ Frankfurt RPC, Frankfurt Jito block engine, Frankfurt fast-landing endpoints.
 Do **not** use Helsinki — it adds ~25 ms to every snipe.
 
 Setup, in order:
+
 1. `installimage` → Ubuntu 24.04, keep the RAID1 default.
 2. SSH keys only; `ufw default deny incoming && ufw allow ssh && ufw enable`.
 3. **`apt install -y chrony`** — not cosmetic: the freshness gate compares the
@@ -181,35 +177,14 @@ Setup, in order:
    fill on-chain.
 5. Fill in real tip accounts for each `FAST_PROVIDERS` entry from that
    provider's docs — **a wrong tip account is accepted and then silently never
-   lands**. Helius Sender uses its own tip accounts, *not* Jito's.
+   lands**. Helius Sender uses its own tip accounts, _not_ Jito's.
 6. Only then scale up size, wallet count, and enable `fast`/`jito`/`tpu`.
 
-## 7. PR body (paste when access is granted)
+## 7. PR body
 
-> ### Pump.fun creator-wallet sniper
->
-> Rust-only rebuild of the legacy sniper branches on current `carbon-core`,
-> replacing the Rust→WebSocket→TypeScript architecture with a single binary.
->
-> **Why a rebuild rather than a rebase:** `sniper-all-tokens`, `test/1` and
-> `feature/ben` share no merge base with `main`, and pump.fun has changed
-> substantially since — `Buy` now needs 16 accounts (creator vault, volume
-> accumulators, fee config) versus the 12 the old TypeScript builder sent, and
-> there is a whole v2 quote-mint flow. The old transactions would fail on-chain.
->
-> **What's here:**
-> - `examples/pumpfun-sniper/` — new example crate
-> - Listener on `Create` filtered to watched creator wallets, with balance,
->   blacklist, position and freshness guards
-> - `buy_exact_sol_in` builder with locally-derived PDAs (no RPC on the hot
->   path) and the program's documented quote formula (unit tested)
-> - 30-wallet parallel build/sign, fanned across RPC spray, configurable
->   anti-MEV landing providers, and Jito bundles dealt across regions
-> - Startup balance preflight and on-chain PDA validation that fail fast
-> - Docs: architecture, dispatch design, verified provider reference
->
-> Defaults to `SEND_MODE=simulate` (dry run). Nothing sends until explicitly
-> configured.
+Superseded — the PR is open at
+https://github.com/mekka-tech/carbon/pull/1 and its description is
+the current one. Edit it there rather than here.
 
 ## 8. Known residual risks
 
