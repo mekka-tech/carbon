@@ -63,15 +63,39 @@ Two deliberate differences in the Rust sniper:
   ```
 
 ### Helius Sender
-- **Frankfurt:** `https://fra-sender.helius-rpc.com/fast`
-- Other regions: AMS, TYO, SG, LAX, LON, EWR, PITT, SLC
-- **No API key**, no credits billed
-- **Minimum tip:** 0.001 SOL for full routing; 0.000005 SOL with
-  `?swqos_only=true` (fewer pathways, no priority buffer)
-- Submits in parallel to Jito **and** Helius (and Harmonic, Rakurai, …), so it
-  is effectively several routes in one call — and it is not subject to Jito's
-  per-IP limit the way a direct Jito call is.
-- Uses Jito's tip accounts. Requires a priority fee *as well as* the tip.
+*(verified against helius.dev/docs/sending-transactions/sender)*
+- **Frankfurt:** `http://fra-sender.helius-rpc.com/fast` — regional endpoints
+  are **HTTP** and intended for backends; the HTTPS
+  `https://sender.helius-rpc.com/fast` auto-routes to the nearest region.
+  Other regions: `ams`, `lon`, `ewr`, `slc`, `tyo`, `sg`.
+- `/ping` on any regional host is a latency probe.
+- **No API key** for Sender itself, no credits billed, available on the free
+  plan. (An API key is still needed for the regular RPC you use for
+  blockhashes.)
+- **Rate limit: 50 TPS** by default — comfortably above a 30-buy burst, and far
+  more usable than Jito's 1 req/s/region.
+- **Minimum tip:** 0.001 SOL (Sender Max — enters the priority tip buffer and
+  uses every pathway); 0.000005 SOL with `?swqos_only=true` (single fast path,
+  no buffer). A priority fee is required *in addition to* the tip.
+- **`?mev-protect=true`** routes around validators statistically linked to
+  sandwich attacks. Works on both tiers and needs no request-body change —
+  combine as `?swqos_only=true&mev-protect=true`. Worth enabling for buys.
+- Request body is exactly what we send: JSON-RPC `sendTransaction` with base64
+  and `{"encoding":"base64","skipPreflight":true,"maxRetries":0}`.
+- ⚠️ **Helius Sender has its OWN tip accounts — not Jito's.** Tipping a Jito
+  account here does not count as a Sender tip. All 10:
+  ```
+  4ACfpUFoaSD9bfPdeu6DBt89gB6ENTeHBXCAi87NhDEE
+  D2L6yPZ2FmmmTKPgzaMKdhu6EWZcTpLy1Vhx8uvZe7NZ
+  9bnz4RShgq1hAnLnZbP8kbgBg1kEmcJBYQq3gQbmnSta
+  5VY91ws6B2hMmBFRsXkoAAdsPHBJwRfBht4DXox3xkwn
+  2nyhqdwKcJZR2vcqCyrYsaPVdAnFoJjiksCXJ7hfEYgD
+  2q5pghRs6arqVjRvT5gfgWfWcHWmw1ZuCzphgd5KfWGJ
+  3KCKozbAaF75qEU33jtzozcJ29yJuaLJTy2jFdzUY8bT
+  4TQLFNWK8AovT1gFvda5jfw2oJeRMKEmw7aH6MGBJ3or
+  4vieeGHPYPG2MmyPRcYjdiDmmhN3ww7hsFNap8pVN3Ey
+  wyvPkWjVZz1M8fHQnMMCDTQDbkManefNNhweYk5WkcF
+  ```
 
 ### Hello Moon — Lunar Lander
 - **Frankfurt:** `http://fra.lunar-lander.hellomoon.io/send`
