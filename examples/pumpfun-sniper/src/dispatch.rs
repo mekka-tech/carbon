@@ -6,7 +6,7 @@ use {
             instructions::{self, CoinAccounts, StaticAccounts},
             quote::{self, CurveState},
         },
-        sender::{fast::FastSenderPool, jito, rpc::RpcPool},
+        sender::{fast::FastSenderPool, jito, rpc::RpcPool, tpu::TpuSender},
     },
     solana_compute_budget_interface::ComputeBudgetInstruction,
     solana_hash::Hash,
@@ -22,6 +22,7 @@ pub struct BuyDispatcher {
     cfg: Arc<Config>,
     rpc: Arc<RpcPool>,
     fast: Arc<FastSenderPool>,
+    tpu: Arc<TpuSender>,
     blockhash: Arc<RwLock<Hash>>,
     statics: Arc<StaticAccounts>,
     initial_curve: CurveState,
@@ -32,6 +33,7 @@ impl BuyDispatcher {
         cfg: Arc<Config>,
         rpc: Arc<RpcPool>,
         fast: Arc<FastSenderPool>,
+        tpu: Arc<TpuSender>,
         blockhash: Arc<RwLock<Hash>>,
         statics: Arc<StaticAccounts>,
         initial_curve: CurveState,
@@ -40,6 +42,7 @@ impl BuyDispatcher {
             cfg,
             rpc,
             fast,
+            tpu,
             blockhash,
             statics,
             initial_curve,
@@ -146,8 +149,13 @@ impl BuyDispatcher {
                 jito::send_bundles(&urls, &txs).await;
             }));
         }
+        // Direct QUIC to the next leaders' TPU. Targets and their connections
+        // are kept resolved and warm by a background task, so this is a
+        // single round trip and never awaits an RPC call.
         if self.cfg.send_paths.contains(&SendPath::Tpu) {
-            log::warn!("tpu send path is not implemented yet (milestone 2), skipping");
+            let tpu = Arc::clone(&self.tpu);
+            let txs = txs.clone();
+            paths.push(Box::pin(async move { tpu.send(&txs).await }));
         }
 
         futures::future::join_all(paths).await;

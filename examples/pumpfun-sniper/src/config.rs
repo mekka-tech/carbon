@@ -18,7 +18,9 @@ pub enum SendPath {
     /// Anti-MEV / low-latency providers (Helius Sender, Jito sendTransaction,
     /// Nextblock, 0slot, …) configured via `FAST_PROVIDERS`.
     Fast,
-    /// Direct QUIC to upcoming leaders' TPU (milestone 2).
+    /// Direct QUIC to upcoming leaders' TPU, bypassing RPC entirely. See
+    /// `sender/tpu.rs` — connections to the next `TPU_LEADERS_AHEAD` leaders
+    /// are kept pre-warmed so a send is one round trip.
     Tpu,
     /// Parallel Jito bundles of 5 with tips (optional, off by default).
     Jito,
@@ -59,7 +61,8 @@ pub struct Config {
     pub compute_unit_limit: u32,
     pub jito_block_engine_urls: Vec<String>,
     pub jito_tip_lamports: u64,
-    #[allow(dead_code)] // milestone 2: direct-TPU sender
+    /// How many distinct upcoming leaders the direct-TPU path targets. 0
+    /// disables the path even if `SEND_PATHS` lists `tpu`.
     pub tpu_leaders_ahead: u64,
 
     /// Extra lamports (on top of buy amount) each wallet must hold to cover

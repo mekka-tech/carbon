@@ -12,11 +12,11 @@ use {
     carbon_yellowstone_grpc_datasource::{
         YellowstoneGrpcClientConfig, YellowstoneGrpcGeyserClient,
     },
-    config::Config,
+    config::{Config, SendPath},
     dispatch::BuyDispatcher,
     processor::SniperProcessor,
     pump::{instructions::StaticAccounts, pdas, quote::CurveState},
-    sender::{fast::FastSenderPool, rpc::RpcPool},
+    sender::{fast::FastSenderPool, rpc::RpcPool, tpu::TpuSender},
     std::{
         collections::{HashMap, HashSet},
         sync::Arc,
@@ -52,6 +52,26 @@ pub async fn main() -> CarbonResult<()> {
     if !fast.is_empty() {
         log::info!("{} fast provider(s) configured", fast.len());
         fast.warm().await;
+    }
+
+    // Direct-TPU path. Constructed unconditionally so the dispatcher always has
+    // one, but it only does work — and only costs an RPC call every few hundred
+    // ms — when `SEND_PATHS` enables it.
+    let tpu = Arc::new(TpuSender::new(Arc::clone(&rpc), cfg.tpu_leaders_ahead));
+    if cfg.send_paths.contains(&SendPath::Tpu) {
+        if tpu.is_enabled() {
+            // Resolve and pre-warm once before the pipeline starts, so the
+            // first snipe of the run isn't the one paying for a QUIC handshake.
+            tpu.refresh().await;
+            log::info!(
+                "tpu direct path enabled: {} upcoming leader(s), {} connection(s) warm",
+                cfg.tpu_leaders_ahead,
+                tpu.targets().len()
+            );
+            tpu.spawn_refresher();
+        } else {
+            log::warn!("SEND_PATHS includes 'tpu' but TPU_LEADERS_AHEAD=0, path disabled");
+        }
     }
 
     // Fetch the pump Global account once: fee bps + initial virtual reserves
@@ -123,6 +143,7 @@ pub async fn main() -> CarbonResult<()> {
         Arc::clone(&cfg),
         Arc::clone(&pool),
         Arc::clone(&fast),
+        Arc::clone(&tpu),
         Arc::clone(&blockhash),
         Arc::clone(&statics),
         initial_curve,

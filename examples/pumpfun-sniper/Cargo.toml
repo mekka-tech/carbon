@@ -37,6 +37,16 @@ solana-compute-budget-interface = "^3.0.0"
 solana-keypair = "^3.0.0"
 solana-signer = "^3.0.0"
 
+# Direct-TPU send path. `solana-client` already pulls both in transitively (its
+# own `ConnectionCache` wrapper is built on them); they are named here so the
+# `ClientConnection` trait and the QUIC port offset can be used directly. The
+# `agave-unstable-api` feature is what `solana-client` itself enables — without
+# it the crate is `#[deprecated]` at crate level and every use warns.
+solana-connection-cache = { version = "^3.1.5", default-features = false, features = [
+    "agave-unstable-api",
+] }
+solana-quic-definitions = "^3.0.0"
+
 [dependencies.rustls]
 default-features = false
 features = ["std", "aws_lc_rs"]
