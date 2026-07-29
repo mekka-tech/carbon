@@ -13,6 +13,27 @@ Hetzner FSN1, ~4–5 ms from Frankfurt.
 > the entries below marked "from docs" were confirmed and the rest need you to
 > paste the current values.
 
+## What we already run in production
+
+The `dumpfun-frontend` repo (`lib/transaction-services/`) uses three services,
+one adapter each — **Jito Block Engine**, **Nozomi (Temporal)**, and a
+**fast RPC** adapter — behind a factory/selector with a region-aware
+endpoint manager. All three are covered below, so the sniper aligns with the
+stack that is already proven in production rather than introducing new
+providers.
+
+Two deliberate differences in the Rust sniper:
+
+- **One generic implementation instead of a class per adapter.** Providers are
+  described in config (`name|url|tip_accounts|tip_sol[|auth[|format]]`), since
+  they all share the same shape: normal transaction + tip transfer, POSTed to a
+  regional endpoint. Per-provider quirks that do differ (JSON-RPC vs a bare
+  `{"transaction": ...}` body, auth header vs key-in-URL) are config fields.
+- **Static nearest-first region ordering, not runtime region selection.** The
+  frontend picks a region dynamically; the sniper runs on a fixed box in
+  Hetzner FSN1, so the nearest region is known ahead of time and probing on the
+  hot path would only add latency. Order the endpoint lists Frankfurt-first.
+
 ## Verified
 
 ### Jito
@@ -21,7 +42,10 @@ Hetzner FSN1, ~4–5 ms from Frankfurt.
   - bundles: `/api/v1/bundles` (max 5 txs)
 - Other regions: `amsterdam`, `dublin`, `london`, `ny`, `slc`, `singapore`, `tokyo`
 - **Minimum tip:** 1000 lamports (competitive launches need far more)
-- **No API key required**
+- **Auth (if used) goes in the URL as `?uuid=<key>`**, matching our
+  `jito-block-engine-adapter.ts`. Our frontend encodes the transaction as
+  **bs58** with no options object; the sniper sends base64 with
+  `{"encoding":"base64"}` — both are accepted by Jito.
 - ⚠️ **Rate limit: 1 request/second per IP per region.** This is the big one for
   a 30-buy fanout — six bundles at one endpoint means five `429`s. The sniper
   deals bundles round-robin across `JITO_BLOCK_ENGINE_URLS` for this reason.
@@ -61,10 +85,42 @@ Hetzner FSN1, ~4–5 ms from Frankfurt.
   rather than JSON-RPC, set the 6th config field to `transaction`.
 
 ### Temporal / Nozomi
-- Regions: **Frankfurt**, Amsterdam, US East
-- Drop-in `sendTransaction` replacement; API key goes in the URL as `?c=<uuid>`
-- **Minimum tip:** 0.001 SOL to the Nozomi tip address
-- Higher tip = higher queue priority
+*(values below taken from our own `nozomi-adapter.ts` — production-verified)*
+- Endpoint: `https://<region>.nozomi.temporal.xyz/api/sendTransaction2?c=<API_KEY>`
+  — regions **Frankfurt**, Amsterdam, US East. `/ping` is a lightweight RTT
+  probe with a 65 s keep-alive.
+- ⚠️ **Not JSON-RPC.** The body is the **bare base64 transaction** with
+  `Content-Type: text/plain`, and the response carries **no signature** —
+  derive it from the transaction you signed. Use `format=raw` in
+  `FAST_PROVIDERS`; sending JSON-RPC here fails silently.
+- **API key is required** and goes in the URL as `?c=<uuid>`, not a header.
+- **Minimum tip:** 1_000_000 lamports (0.001 SOL). Higher tip = higher queue
+  priority.
+- **17 tip accounts.** Their docs explicitly call for a *different* address per
+  transaction to avoid write-CU exhaustion, so configure all of them and let
+  the sniper spread the 30 wallets across the list:
+  ```
+  TEMPaMeCRFAS9EKF53Jd6KpHxgL47uWLcpFArU1Fanq
+  noz3jAjPiHuBPqiSPkkugaJDkJscPuRhYnSpbi8UvC4
+  noz3str9KXfpKknefHji8L1mPgimezaiUyCHYMDv1GE
+  noz6uoYCDijhu1V7cutCpwxNiSovEwLdRHPwmgCGDNo
+  noz9EPNcT7WH6Sou3sr3GGjHQYVkN3DNirpbvDkv9YJ
+  nozc5yT15LazbLTFVZzoNZCwjh3yUtW86LoUyqsBu4L
+  nozFrhfnNGoyqwVuwPAW4aaGqempx4PU6g6D9CJMv7Z
+  nozievPk7HyK1Rqy1MPJwVQ7qQg2QoJGyP71oeDwbsu
+  noznbgwYnBLDHu8wcQVCEw6kDrXkPdKkydGJGNXGvL7
+  nozNVWs5N8mgzuD3qigrCG2UoKxZttxzZ85pvAQVrbP
+  nozpEGbwx4BcGp6pvEdAh1JoC2CQGZdU6HbNP1v2p6P
+  nozrhjhkCr3zXT3BiT4WCodYCUFeQvcdUkM7MqhKqge
+  nozrwQtWhEdrA6W8dkbt9gnUaMs52PdAv5byipnadq3
+  nozUacTVWub3cL4mJmGCYjKZTnE9RbdY5AP46iQgbPJ
+  nozWCyTPppJjRuw2fpzDhhWbW355fzosWSzrrMYB1Qk
+  nozWNju6dY353eMkMqURqwQEoM3SFgEKC6psLCSfUne
+  nozxNBgWohjR75vdspfxR5H9ceC7XXH99xpxhVGt3Bb
+  ```
+- Note: the frontend's `NOZOMI_ENABLED` kill switch and `mode: "no-cors"` are
+  browser-only concerns (CORS). Server-side from Rust neither applies, and we
+  can read real status codes instead of opaque responses.
 
 ## Require an account / API key
 

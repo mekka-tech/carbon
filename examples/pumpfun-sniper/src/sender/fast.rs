@@ -28,6 +28,11 @@ pub enum PayloadFormat {
     JsonRpc,
     /// `{"transaction": "<base64>"}`
     TransactionField,
+    /// The bare base64 transaction as a `text/plain` body, with no JSON
+    /// wrapper — what Nozomi's `sendTransaction2` expects. These endpoints
+    /// typically return no signature, so success is inferred from the status
+    /// code and the signature is taken from the transaction we signed.
+    RawBase64,
 }
 
 impl std::str::FromStr for PayloadFormat {
@@ -37,8 +42,9 @@ impl std::str::FromStr for PayloadFormat {
         match raw {
             "" | "jsonrpc" => Ok(Self::JsonRpc),
             "transaction" => Ok(Self::TransactionField),
+            "raw" => Ok(Self::RawBase64),
             other => Err(format!(
-                "payload format must be jsonrpc|transaction, got {other}"
+                "payload format must be jsonrpc|transaction|raw, got {other}"
             )),
         }
     }
@@ -66,13 +72,19 @@ pub struct FastProvider {
 
 impl FastProvider {
     /// Tip instruction for this provider, or `None` if it takes no tip.
-    /// The tip account is chosen per payer so concurrent buys don't all
-    /// write-lock the same account.
+    ///
+    /// The tip account is picked from the payer's key, so the 30 wallets in a
+    /// fanout spread across the provider's tip accounts rather than all
+    /// write-locking one. Providers care about this: Nozomi's docs call for a
+    /// different tip address per transaction to avoid write-CU exhaustion, so
+    /// configure all of a provider's tip accounts, not just one.
     pub fn tip_instruction(&self, payer: &Pubkey) -> Option<Instruction> {
         if self.tip_accounts.is_empty() || self.tip_lamports == 0 {
             return None;
         }
-        let index = payer.as_ref()[0] as usize % self.tip_accounts.len();
+        // Two payer bytes, so wallets spread across lists longer than 8.
+        let index = (payer.as_ref()[0] as usize * 31 + payer.as_ref()[1] as usize)
+            % self.tip_accounts.len();
         Some(system_instruction::transfer(
             payer,
             &self.tip_accounts[index],
@@ -171,8 +183,9 @@ async fn send_one(
         .map(|bytes| base64::engine::general_purpose::STANDARD.encode(bytes))
         .map_err(|e| format!("serialize tx: {e}"))?;
 
-    let body = match provider.format {
-        PayloadFormat::JsonRpc => serde_json::json!({
+    let mut request = client.post(&provider.url);
+    request = match provider.format {
+        PayloadFormat::JsonRpc => request.json(&serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
             "method": "sendTransaction",
@@ -181,14 +194,13 @@ async fn send_one(
                 "skipPreflight": true,
                 "maxRetries": 0,
             }],
-        }),
-        PayloadFormat::TransactionField => serde_json::json!({
+        })),
+        PayloadFormat::TransactionField => request.json(&serde_json::json!({
             "transaction": encoded,
             "encoding": "base64",
-        }),
+        })),
+        PayloadFormat::RawBase64 => request.header("Content-Type", "text/plain").body(encoded),
     };
-
-    let mut request = client.post(&provider.url).json(&body);
     if let Some(auth) = &provider.auth_header {
         request = request.header("Authorization", auth);
     }
