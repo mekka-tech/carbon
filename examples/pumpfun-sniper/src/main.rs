@@ -3,6 +3,7 @@ mod dispatch;
 mod processor;
 mod pump;
 mod sender;
+mod wallets;
 
 use {
     carbon_core::error::{CarbonResult, Error},
@@ -15,8 +16,7 @@ use {
     dispatch::BuyDispatcher,
     processor::SniperProcessor,
     pump::{instructions::StaticAccounts, pdas, quote::CurveState},
-    solana_client::nonblocking::rpc_client::RpcClient,
-    solana_commitment_config::CommitmentConfig,
+    sender::{fast::FastSenderPool, rpc::RpcPool},
     std::{
         collections::{HashMap, HashSet},
         sync::Arc,
@@ -38,16 +38,21 @@ pub async fn main() -> CarbonResult<()> {
 
     let cfg = Arc::new(Config::from_env().map_err(Error::Custom)?);
     log::info!(
-        "sniper starting: {} watched creator(s), {} buyer wallet(s), mode {:?}",
+        "sniper starting: {} watched creator(s), {} buyer wallet(s), {} rpc endpoint(s), paths {:?}{}",
         cfg.watched_creators.len(),
         cfg.buyers.len(),
-        cfg.send_mode
+        cfg.rpc_urls.len(),
+        cfg.send_paths,
+        if cfg.dry_run { " (DRY RUN)" } else { "" }
     );
 
-    let rpc = Arc::new(RpcClient::new_with_commitment(
-        cfg.rpc_url.clone(),
-        CommitmentConfig::processed(),
-    ));
+    let pool = Arc::new(RpcPool::new(&cfg.rpc_urls));
+    let rpc = Arc::clone(pool.primary());
+    let fast = Arc::new(FastSenderPool::new(cfg.fast_providers.clone()));
+    if !fast.is_empty() {
+        log::info!("{} fast provider(s) configured", fast.len());
+        fast.warm().await;
+    }
 
     // Fetch the pump Global account once: fee bps + initial virtual reserves
     // feed the quote; fee_recipient feeds the buy instruction.
@@ -78,7 +83,20 @@ pub async fn main() -> CarbonResult<()> {
         protocol_fee_bps: global.fee_basis_points,
         creator_fee_bps: global.creator_fee_basis_points,
     };
-    let statics = StaticAccounts::new(global.fee_recipient);
+    let statics = Arc::new(StaticAccounts::new(global.fee_recipient));
+
+    // Every wallet must be able to cover its buy plus fees and rent — catch
+    // that now, not mid-launch.
+    let underfunded = wallets::preflight_balances(&cfg, &rpc)
+        .await
+        .map_err(Error::Custom)?;
+    if !underfunded.is_empty() && !cfg.dry_run {
+        return Err(Error::Custom(format!(
+            "{} of {} buyer wallets are underfunded — fund them or remove them before going live",
+            underfunded.len(),
+            cfg.buyers.len()
+        )));
+    }
 
     // Warm blockhash so the dispatch hot path never awaits an RPC round trip.
     let initial_blockhash = rpc
@@ -103,9 +121,10 @@ pub async fn main() -> CarbonResult<()> {
     let (signal_tx, signal_rx) = mpsc::channel(1_024);
     let dispatcher = BuyDispatcher::new(
         Arc::clone(&cfg),
-        Arc::clone(&rpc),
+        Arc::clone(&pool),
+        Arc::clone(&fast),
         Arc::clone(&blockhash),
-        statics,
+        Arc::clone(&statics),
         initial_curve,
     );
     tokio::spawn(dispatcher.run(signal_rx));
