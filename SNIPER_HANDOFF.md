@@ -40,7 +40,7 @@ TypeScript swap service. Those branches share **no merge base** with current
   min creator balance, max creator dev-buy, per-mint dedup, max open
   positions, transaction-age gate. Decodes the creator's dev buy out of the
   create transaction to price the curve shift.
-- **Buy builder** — `buy_exact_sol_in` with all 16 accounts derived locally
+- **Buy builder** — `buy_exact_sol_in` with all 18 accounts derived locally
   (creator vault, volume accumulators, fee config), so there are **zero RPC
   calls on the hot path**. Instruction data reuses the decoder's borsh structs
   rather than hardcoded bytes.
