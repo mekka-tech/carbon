@@ -62,7 +62,17 @@ pub fn min_tokens_out(
         *initial
     };
     let expected = state.tokens_out_for_sol(spendable_sol_in);
-    ((expected as u128) * (10_000u128.saturating_sub(slippage_bps as u128)) / 10_000) as u64
+    let floored =
+        ((expected as u128) * (10_000u128.saturating_sub(slippage_bps as u128)) / 10_000) as u64;
+    // The program rejects a zero minimum with BuyZeroAmount (6020), so a
+    // 100%-slippage or dust-sized buy would fail on-chain rather than filling
+    // at any price. Clamp to 1 base unit — the intent of "accept any amount" —
+    // but leave a genuinely zero-output quote at zero so the caller can skip it.
+    if floored == 0 && expected > 0 {
+        1
+    } else {
+        floored
+    }
 }
 
 #[cfg(test)]
@@ -118,8 +128,11 @@ mod tests {
         let plain = curve.tokens_out_for_sol(1_000_000_000);
         let min = min_tokens_out(&curve, 1_000_000_000, 2_000_000_000, 500);
         assert!(min < plain);
-        // 100% slippage floors at zero minimum.
-        assert_eq!(min_tokens_out(&curve, 1_000_000_000, 0, 10_000), 0);
+        // 100% slippage clamps to 1, not 0: the program rejects a zero
+        // minimum with BuyZeroAmount, so "accept any amount" must be 1.
+        assert_eq!(min_tokens_out(&curve, 1_000_000_000, 0, 10_000), 1);
+        // A genuinely zero-output quote stays zero so callers can skip it.
+        assert_eq!(min_tokens_out(&curve, 0, 0, 0), 0);
     }
 
     #[test]

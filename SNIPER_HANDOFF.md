@@ -68,10 +68,26 @@ TypeScript swap service. Those branches share **no merge base** with current
   **400 ms send timeout** (QUIC gives no application ack, so a black-holed peer
   would otherwise stall the dispatcher past the slot being raced for).
 
+- **Buy instruction verified against mainnet.** The audit pulled pump.fun's
+  on-chain Anchor IDL and 49 real successful buys, then used differential
+  `simulateTransaction` to prove the exact layout. It found a **critical bug**:
+  the builder passed 16 accounts, but the deployed program requires **18** —
+  every live buy would have failed with `BuybackFeeRecipientMissing` (6062).
+  The two extra accounts come from `remaining_accounts` and appear in neither
+  the IDL nor the Codama decoder:
+  - `remaining[0]` = `bonding_curve_v2`, PDA `["bonding-curve-v2", mint]`,
+    read-only. Wrong address => `InvalidBondingCurveV2` (6074).
+  - `remaining[1]` = one of `Global.buyback_fee_recipients`, **writable**.
+    Read-only => `PrivilegeEscalation`; outside the set =>
+    `BuybackFeeRecipientNotAuthorized` (6057).
+
+  Also fixed: `global_volume_accumulator` was writable (IDL says read-only, and
+  a write lock there serialises us against every other pump buyer in the slot),
+  and the token program is now a field rather than a hardcode. See
+  `VERIFICATION.md` for the evidence and transaction signatures.
+
 ### In flight when this session ended
-- **Buy-instruction audit** — verifying account order/flags/PDAs against the
-  Codama decoder and real mainnet transactions; produces `VERIFICATION.md`.
-  Check `git status` for uncommitted work.
+Nothing — both subagents completed and their work is committed.
 
 ### Not built yet
 - **Shredstream detection** (`M3`) — the only route to block 0. Geyser at
@@ -175,7 +191,18 @@ Setup, in order:
 > Defaults to `SEND_MODE=simulate` (dry run). Nothing sends until explicitly
 > configured.
 
-## 8. Gotchas worth remembering
+## 8. Known residual risks
+
+- **The two trailing buy accounts are undocumented.** They are not in the IDL,
+  so a program upgrade can change them with no IDL signal and no compile error
+  — buys would simply start failing. Re-run the `VERIFICATION.md` procedure
+  after any pump.fun upgrade.
+- **`create_v2` / mayhem coins are unsupported.** `buy_v2` takes 27 accounts and
+  derives `bonding_curve_v2` on the mayhem program instead.
+- **Unstaked QUIC** (direct-TPU path) is deprioritized by validators exactly
+  under the load a contested launch creates.
+
+## 9. Gotchas worth remembering
 
 - **Jito rate-limits to 1 request/second per IP per region.** Six bundles at
   one endpoint means five `429`s — bundles are dealt across regions for this

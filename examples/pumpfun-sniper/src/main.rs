@@ -103,7 +103,10 @@ pub async fn main() -> CarbonResult<()> {
         protocol_fee_bps: global.fee_basis_points,
         creator_fee_bps: global.creator_fee_basis_points,
     };
-    let statics = Arc::new(StaticAccounts::new(global.fee_recipient));
+    // Take the buyback fee recipients from the live Global account rather than
+    // the compiled-in snapshot: `update_buyback_config` can rotate them, and a
+    // stale list fails every buy with BuybackFeeRecipientNotAuthorized (6057).
+    let statics = Arc::new(StaticAccounts::from_global(&global));
 
     // Every wallet must be able to cover its buy plus fees and rent — catch
     // that now, not mid-launch.
