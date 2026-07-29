@@ -1,0 +1,43 @@
+[package]
+name = "pumpfun-sniper-example"
+version = "1.0.0"
+edition = { workspace = true }
+publish = false
+
+[dependencies]
+carbon-core = { workspace = true }
+carbon-log-metrics = { workspace = true }
+carbon-pumpfun-decoder = { workspace = true }
+carbon-yellowstone-grpc-datasource = { workspace = true }
+
+base64 = { workspace = true }
+bincode = { workspace = true }
+borsh = { workspace = true }
+bs58 = { workspace = true }
+dotenv = { workspace = true }
+env_logger = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+yellowstone-grpc-proto = { workspace = true }
+
+solana-client = { workspace = true }
+solana-commitment-config = { workspace = true }
+solana-hash = { workspace = true }
+solana-instruction = { workspace = true }
+solana-message = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-system-interface = { workspace = true }
+solana-transaction = { workspace = true }
+
+solana-compute-budget-interface = "^3.0.0"
+solana-keypair = "^3.0.0"
+solana-signer = "^3.0.0"
+
+[dependencies.rustls]
+default-features = false
+features = ["std", "aws_lc_rs"]
+version = "0.23.35"

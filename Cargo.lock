@@ -7004,6 +7004,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpfun-sniper-example"
+version = "1.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "bincode",
+ "borsh",
+ "bs58",
+ "carbon-core",
+ "carbon-log-metrics",
+ "carbon-pumpfun-decoder",
+ "carbon-yellowstone-grpc-datasource",
+ "dotenv",
+ "env_logger",
+ "futures 0.3.31",
+ "log",
+ "reqwest 0.12.28",
+ "rustls 0.23.35",
+ "serde",
+ "serde_json",
+ "solana-client",
+ "solana-commitment-config",
+ "solana-compute-budget-interface",
+ "solana-hash 3.1.0",
+ "solana-instruction",
+ "solana-keypair",
+ "solana-message",
+ "solana-pubkey 3.0.0",
+ "solana-signer",
+ "solana-system-interface",
+ "solana-transaction",
+ "tokio",
+ "yellowstone-grpc-proto",
+]
+
+[[package]]
 name = "qstring"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
