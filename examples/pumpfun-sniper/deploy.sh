@@ -13,7 +13,7 @@
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/mekka-tech/carbon.git}"
-BRANCH="${BRANCH:-claude/pumpfun-coin-sniper-mvwiwh}"
+BRANCH="${BRANCH:-sniper}"
 DIR="${DIR:-/root/carbon}"
 HOST="${SNIPER_HOST:?set SNIPER_HOST=root@<ip>, or SNIPER_HOST=local to run on the box}"
 
