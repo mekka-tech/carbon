@@ -1,21 +1,29 @@
 mod config;
+mod market;
+mod tui_log;
+mod console;
+mod dashboard;
 mod dispatch;
+mod fills;
 mod processor;
 mod pump;
+mod sell;
 mod sender;
 mod wallets;
 
 use {
     carbon_core::error::{CarbonResult, Error},
     carbon_log_metrics::LogMetrics,
+    carbon_jito_shredstream_grpc_datasource::JitoShredstreamGrpcClient,
     carbon_pumpfun_decoder::{accounts::global::Global, PumpfunDecoder},
     carbon_yellowstone_grpc_datasource::{
         YellowstoneGrpcClientConfig, YellowstoneGrpcGeyserClient,
     },
-    config::{Config, SendPath},
+    config::{Config, DatasourceKind, MarketFeed, SendPath},
     dispatch::BuyDispatcher,
     processor::SniperProcessor,
     pump::{instructions::StaticAccounts, pdas, quote::CurveState},
+    solana_pubkey::Pubkey,
     sender::{fast::FastSenderPool, rpc::RpcPool, tpu::TpuSender},
     std::{
         collections::{HashMap, HashSet},
@@ -26,10 +34,61 @@ use {
     yellowstone_grpc_proto::geyser::{CommitmentLevel, SubscribeRequestFilterTransactions},
 };
 
+/// A Yellowstone subscription filtered server-side to the pump program at
+/// `Processed`.
+///
+/// Shared by the primary feed on `DATASOURCE=yellowstone` and by the
+/// market-only secondary feed alongside shredstream, because the two want the
+/// same transactions: the market tracker needs precisely the pump transactions
+/// detection needs, it just needs them carrying their execution metadata.
+fn pumpfun_geyser_client(endpoint: String, x_token: Option<String>) -> YellowstoneGrpcGeyserClient {
+    let mut transaction_filters = HashMap::new();
+    transaction_filters.insert(
+        "pumpfun".to_string(),
+        SubscribeRequestFilterTransactions {
+            vote: Some(false),
+            failed: Some(false),
+            account_include: vec![pdas::PUMPFUN_PROGRAM_ID.to_string()],
+            account_exclude: vec![],
+            account_required: vec![],
+            signature: None,
+        },
+    );
+
+    YellowstoneGrpcGeyserClient::new(
+        endpoint,
+        x_token,
+        Some(CommitmentLevel::Processed),
+        HashMap::default(),
+        transaction_filters,
+        Default::default(),
+        Arc::new(RwLock::new(HashSet::new())),
+        YellowstoneGrpcClientConfig::default(),
+        None,
+        None,
+    )
+}
+
 #[tokio::main]
 pub async fn main() -> CarbonResult<()> {
     dotenv::dotenv().ok();
-    env_logger::init();
+    // In interactive mode stderr belongs to the TUI: env_logger and
+    // carbon-log-metrics would otherwise interleave with the alternate screen
+    // and shred the layout. Route records into a ring the panel renders, and
+    // mirror everything to a file so nothing is lost.
+    let interactive = std::env::args().any(|a| a == "--interactive" || a == "-i");
+    let log_ring = if interactive {
+        Some(tui_log::TuiLogger::install(
+            Some("sniper.log"),
+            std::env::var("RUST_LOG")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(log::Level::Info),
+        ))
+    } else {
+        env_logger::init();
+        None
+    };
 
     // https://github.com/rustls/rustls/issues/1877
     rustls::crypto::aws_lc_rs::default_provider()
@@ -38,7 +97,8 @@ pub async fn main() -> CarbonResult<()> {
 
     let cfg = Arc::new(Config::from_env().map_err(Error::Custom)?);
     log::info!(
-        "sniper starting: {} watched creator(s), {} buyer wallet(s), {} rpc endpoint(s), paths {:?}{}",
+        "sniper starting: datasource {:?}, {} watched creator(s), {} buyer wallet(s), {} rpc endpoint(s), paths {:?}{}",
+        cfg.datasource,
         cfg.watched_creators.len(),
         cfg.buyers.len(),
         cfg.rpc_urls.len(),
@@ -152,6 +212,16 @@ pub async fn main() -> CarbonResult<()> {
         });
     }
 
+    // Shared so the console can add/remove creators against the live pipeline.
+    let watched: Arc<RwLock<HashSet<Pubkey>>> =
+        Arc::new(RwLock::new(cfg.watched_creators.clone()));
+    let market = Arc::new(RwLock::new(market::MarketTracker::default()));
+
+    // Purchase tracking. The recorder is a plain channel sender, so the
+    // dispatcher can never be delayed or failed by it; the log is read by the
+    // console and the panel.
+    let (fill_recorder, fill_log) = fills::start();
+
     let (signal_tx, signal_rx) = mpsc::channel(1_024);
     let dispatcher = BuyDispatcher::new(
         Arc::clone(&cfg),
@@ -162,46 +232,151 @@ pub async fn main() -> CarbonResult<()> {
         Arc::clone(&statics),
         initial_curve,
         initial_curve_v2,
+        fill_recorder,
     );
     tokio::spawn(dispatcher.run(signal_rx));
 
-    let mut transaction_filters = HashMap::new();
-    transaction_filters.insert(
-        "pumpfun".to_string(),
-        SubscribeRequestFilterTransactions {
-            vote: Some(false),
-            failed: Some(false),
-            account_include: vec![pdas::PUMPFUN_PROGRAM_ID.to_string()],
-            account_exclude: vec![],
-            account_required: vec![],
-            signature: None,
-        },
-    );
-
-    let datasource = YellowstoneGrpcGeyserClient::new(
-        cfg.geyser_url.clone(),
-        cfg.x_token.clone(),
-        Some(CommitmentLevel::Processed),
-        HashMap::default(),
-        transaction_filters,
-        Default::default(),
-        Arc::new(RwLock::new(HashSet::new())),
-        YellowstoneGrpcClientConfig::default(),
-        None,
-        None,
-    );
-
-    carbon_core::pipeline::Pipeline::builder()
-        .datasource(datasource)
+    // Both feeds produce Update::Transaction, so the rest of the pipeline is
+    // identical; only the producer differs. Built separately because the two
+    // datasource types are unrelated and the builder consumes `self`.
+    let builder = carbon_core::pipeline::Pipeline::builder()
         .metrics(Arc::new(LogMetrics::new()))
         .instruction(
             PumpfunDecoder,
-            SniperProcessor::new(Arc::clone(&cfg), signal_tx),
+            SniperProcessor::new(
+                Arc::clone(&cfg),
+                Arc::clone(&watched),
+                Arc::clone(&market),
+                signal_tx,
+            ),
         )
-        .shutdown_strategy(carbon_core::pipeline::ShutdownStrategy::Immediate)
-        .build()?
-        .run()
-        .await?;
+        .shutdown_strategy(carbon_core::pipeline::ShutdownStrategy::Immediate);
+
+    let mut pipeline = match cfg.datasource {
+        DatasourceKind::Yellowstone => {
+            let geyser_url = cfg
+                .geyser_url
+                .clone()
+                .ok_or_else(|| Error::Custom("GEYSER_URL missing".into()))?;
+            log::info!(
+                "market tracking is native on DATASOURCE=yellowstone: the feed carries real \
+                 transaction metadata, so pump TradeEvent CPI events decode from it directly. No \
+                 secondary feed is attached and MARKET_GEYSER_URL is not needed."
+            );
+            builder
+                .datasource(pumpfun_geyser_client(geyser_url, cfg.x_token.clone()))
+                .build()?
+        }
+        DatasourceKind::Shredstream => {
+            let url = cfg
+                .shredstream_url
+                .clone()
+                .ok_or_else(|| Error::Custom("SHREDSTREAM_URL missing".into()))?;
+            log::info!(
+                "shredstream: {} (x-token {})",
+                url,
+                if cfg.shredstream_x_token.is_some() {
+                    "set"
+                } else {
+                    "ABSENT"
+                }
+            );
+            // SubscribeEntriesRequest carries no filters, so this decodes every
+            // transaction on the network rather than just the pump program's.
+            //
+            // ALT resolution is not optional here. Shreds carry no metadata, so
+            // without it every v0 transaction using an address lookup table —
+            // which is every pump.fun v2 launch — yields a truncated account
+            // list, decodes to nothing, and reports success while doing it.
+            // Restricted to pump transactions so we don't fetch lookup tables
+            // for the whole network's traffic.
+            let builder = builder.datasource(
+                JitoShredstreamGrpcClient::new_with_x_token(url, cfg.shredstream_x_token.clone())
+                    .with_alt_resolution(Arc::clone(&rpc))
+                    .with_programs_of_interest(vec![pdas::PUMPFUN_PROGRAM_ID]),
+            );
+
+            // Optional second feed, for metadata only. Both datasources push
+            // Update::Transaction into the SAME SniperProcessor, so a create
+            // that appears on both is processed twice — harmless by
+            // construction: `sniped_mints.contains(&mint)` is tested *before*
+            // the insert, so whichever feed arrives first claims the mint and
+            // the other returns without emitting a second snipe signal. Shreds
+            // are pre-confirmation and the geyser is post-execution, so the
+            // shred wins that race in practice and the buy keeps its timing.
+            //
+            // The guards do not drift between feeds either: `synthetic_meta` is
+            // derived from the PRIMARY datasource, so the balance/freshness
+            // guards stay skipped for updates from both, rather than being
+            // enforced on geyser creates and not on shred ones.
+            let builder = if let MarketFeed::Secondary(market_url) = &cfg.market_feed {
+                log::info!(
+                    "market feed: secondary yellowstone at {} (x-token {}), filtered to the pump \
+                     program at Processed. It exists only to supply transaction metadata — \
+                     shredstream stays the detection feed.",
+                    market_url,
+                    if cfg.market_x_token.is_some() {
+                        "set"
+                    } else {
+                        "ABSENT"
+                    }
+                );
+                builder.datasource(pumpfun_geyser_client(
+                    market_url.clone(),
+                    cfg.market_x_token.clone(),
+                ))
+            } else {
+                // Unavailable — `Native` is unreachable here, it is what the
+                // Yellowstone arm above resolves to.
+                log::warn!(
+                    "live price/volume will be UNAVAILABLE and the market panel will stay empty. \
+                     Pump publishes every fill as a TradeEvent Anchor self-CPI, which is an INNER \
+                     instruction materialised only when the transaction EXECUTES. Shreds carry \
+                     the transaction as SUBMITTED, so the datasource leaves inner_instructions \
+                     empty and no TradeEvent is ever decoded — this is a property of shreds, not \
+                     a misconfiguration, and no amount of waiting will fill the panel. Detection \
+                     is unaffected: `create` is a top-level instruction and is present in the \
+                     submitted message. To get price/volume back, set MARKET_GEYSER_URL (plus \
+                     MARKET_X_TOKEN, or X_TOKEN) and a second yellowstone stream will run \
+                     alongside shredstream purely for metadata, leaving detection — and its \
+                     pre-confirmation speed — on shredstream."
+                );
+                builder
+            };
+
+            builder.build()?
+        }
+    };
+
+    // Interactive mode keeps the pipeline in the background so the operator can
+    // inspect and exit a position in the same process that took it. Without it
+    // the sniper buys and then has nothing to say.
+    if interactive {
+        tokio::spawn(async move {
+            if let Err(err) = pipeline.run().await {
+                log::error!("pipeline stopped: {err:?}");
+            }
+        });
+        console::run(
+            Arc::clone(&cfg),
+            Arc::clone(&rpc),
+            Arc::clone(&watched),
+            Arc::clone(&market),
+            log_ring.unwrap_or_default(),
+            Arc::clone(&blockhash),
+            console::Buying {
+                pool: Arc::clone(&pool),
+                fast: Arc::clone(&fast),
+                statics: Arc::clone(&statics),
+                fills: fill_log,
+                curve_v2: initial_curve_v2,
+            },
+        )
+        .await;
+        return Ok(());
+    }
+
+    pipeline.run().await?;
 
     Ok(())
 }
