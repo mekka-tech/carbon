@@ -491,19 +491,6 @@ pub enum Holders {
     Unknown,
 }
 
-/// Does this RPC error mean "no such account" rather than "I could not answer"?
-///
-/// The two must not be conflated: a nonexistent token account is a real zero
-/// balance, while a transport failure or a rate limit is no information at all,
-/// and treating the second as zero understates a sell's size in exactly the
-/// direction that would let a full exit slip past the cap.
-fn is_missing_account(err: &solana_client::client_error::ClientError) -> bool {
-    let text = err.to_string();
-    text.contains("could not find account")
-        || text.contains("Invalid param")
-        || text.contains("AccountNotFound")
-}
-
 /// Fraction of the sold supply we must hold to count as the only holders.
 /// Not 100%: dust, rounding and a stray test buy should not flip the verdict.
 const SOLE_HOLDER_THRESHOLD: f64 = 0.995;
@@ -536,32 +523,30 @@ async fn holders_of(
         .and_then(|b| b.amount.parse::<u128>().ok())
         .unwrap_or(0);
     let sold = total.saturating_sub(curve_held);
-    let mut ours: u128 = 0;
-    let mut per_wallet: Vec<u64> = Vec::with_capacity(cfg.buyers.len());
-    for buyer in &cfg.buyers {
-        let ata = crate::pump::pdas::associated_token_address_with_program(
-            &buyer.keypair.pubkey(),
-            mint,
-            &crate::pump::pdas::TOKEN_2022_PROGRAM_ID,
-        );
-        // A failed read must not be counted as zero — that would understate our
-        // share and wrongly report Others, which only ever tightens the guard.
-        // A token account that does not exist yet reads as an error and is a
-        // genuine zero, not an unknown — a wallet whose buy never landed simply
-        // holds nothing. Only treat it as unknown if the mint itself resolved.
-        // A missing token account is a genuine zero — a wallet whose buy never
-        // landed holds nothing. But an RPC that fails to ANSWER is not
-        // evidence of zero, and counting it as zero understates the sell's
-        // measured impact, which is the direction that lets a full exit
-        // through. Distinguish them.
-        let units = match rpc.get_token_account_balance(&ata).await {
-            Ok(b) => b.amount.parse::<u64>().unwrap_or(0),
-            Err(err) if is_missing_account(&err) => 0,
-            Err(_) => return (Holders::Unknown, Vec::new()),
-        };
-        per_wallet.push(units);
-        ours = ours.saturating_add(u128::from(units));
-    }
+    // Batched. One `get_token_account_balance` per buyer, awaited serially, is
+    // ~10s at 100 wallets — on the SELL path, in front of the command an
+    // operator reaches for when they need out. `get_multiple_accounts` makes
+    // it ceil(n/100) round trips.
+    let atas: Vec<Pubkey> = cfg
+        .buyers
+        .iter()
+        .map(|b| {
+            crate::pump::pdas::associated_token_address_with_program(
+                &b.keypair.pubkey(),
+                mint,
+                &crate::pump::pdas::TOKEN_2022_PROGRAM_ID,
+            )
+        })
+        .collect();
+    // A failed fetch is not evidence of zero holdings, and understating our
+    // holdings is the direction that would let a full exit past the cap.
+    let Ok(per_wallet) = crate::wallets::fetch_token_amounts(rpc, &atas).await else {
+        return (Holders::Unknown, Vec::new());
+    };
+    let ours: u128 = per_wallet
+        .iter()
+        .map(|u| u128::from(*u))
+        .fold(0u128, |acc, u| acc.saturating_add(u));
     if sold == 0 {
         // Nothing has left the curve at all, so there is nobody to dump on.
         return (Holders::OnlyUs, per_wallet);

@@ -1,5 +1,6 @@
 use {
-    crate::config::Config, solana_client::nonblocking::rpc_client::RpcClient, solana_signer::Signer,
+    crate::config::Config, solana_client::nonblocking::rpc_client::RpcClient,
+    solana_pubkey::Pubkey, solana_signer::Signer,
 };
 
 /// Batch-check every buyer wallet's balance before going live. A wallet that
@@ -87,6 +88,62 @@ pub async fn preflight_balances(cfg: &Config, rpc: &RpcClient) -> Result<Vec<usi
         underfunded.len()
     );
     Ok(underfunded)
+}
+
+
+/// Lamport balances for many accounts, batched.
+///
+/// `get_multiple_accounts` caps at 100 keys, so this is `ceil(n/100)` round
+/// trips instead of `n`. At 100+ wallets that is the difference between two
+/// calls and a hundred — the serial form took ~10s and made the sell path and
+/// the dashboard unusable at that scale.
+///
+/// A missing account is a real zero (it has never been funded). A failed CHUNK
+/// is not, so the whole call fails rather than reporting zeros the caller would
+/// act on.
+pub async fn fetch_lamports(rpc: &RpcClient, keys: &[Pubkey]) -> Result<Vec<u64>, String> {
+    let mut out = Vec::with_capacity(keys.len());
+    for chunk in keys.chunks(100) {
+        let accounts = rpc
+            .get_multiple_accounts(chunk)
+            .await
+            .map_err(|e| format!("balance fetch failed: {e}"))?;
+        out.extend(accounts.into_iter().map(|a| a.map_or(0, |a| a.lamports)));
+    }
+    Ok(out)
+}
+
+/// Token amounts for many token accounts, batched.
+///
+/// Reads the `amount` field directly rather than calling
+/// `get_token_account_balance` per account. Both SPL Token and Token-2022 put
+/// `amount` at offset 64 (`mint: 32` then `owner: 32`); Token-2022 extensions
+/// are appended AFTER the 165-byte base, so the offset holds for both.
+///
+/// A missing or too-short account is zero — a wallet whose buy never landed has
+/// no token account and genuinely holds nothing.
+pub async fn fetch_token_amounts(
+    rpc: &RpcClient,
+    atas: &[Pubkey],
+) -> Result<Vec<u64>, String> {
+    const AMOUNT_OFFSET: usize = 64;
+    let mut out = Vec::with_capacity(atas.len());
+    for chunk in atas.chunks(100) {
+        let accounts = rpc
+            .get_multiple_accounts(chunk)
+            .await
+            .map_err(|e| format!("token balance fetch failed: {e}"))?;
+        out.extend(accounts.into_iter().map(|a| {
+            a.and_then(|a| {
+                a.data
+                    .get(AMOUNT_OFFSET..AMOUNT_OFFSET.saturating_add(8))
+                    .and_then(|b| b.try_into().ok())
+                    .map(u64::from_le_bytes)
+            })
+            .unwrap_or(0)
+        }));
+    }
+    Ok(out)
 }
 
 /// Re-derive every wallet's buy size from live balances.

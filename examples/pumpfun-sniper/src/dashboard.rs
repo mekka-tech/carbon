@@ -153,30 +153,47 @@ pub async fn refresh(
         snapshot.write().await.refreshing = true;
     }
     let mint = positions.first().map(|p| p.mint);
-    let mut wallets = Vec::with_capacity(cfg.buyers.len());
-    for (i, buyer) in cfg.buyers.iter().enumerate() {
-        let pk = buyer.keypair.pubkey();
-        let sol = rpc.get_balance(&pk).await.unwrap_or(0) as f64 / 1e9;
-        let token_units = match mint {
-            Some(m) => {
-                let ata = crate::pump::pdas::associated_token_address_with_program(
-                    &pk,
+    // Batched, not per-wallet. This loop used to await two RPC calls per
+    // buyer, serially: at 100 wallets that is 200 round trips, roughly 20s, on
+    // a 5s timer — the refresh could never finish before the next one started
+    // and the panel would fall permanently behind while hammering the
+    // endpoint the hot path depends on. Now it is ceil(n/100) calls each.
+    let pubkeys: Vec<Pubkey> = cfg.buyers.iter().map(|b| b.keypair.pubkey()).collect();
+    let atas: Vec<Pubkey> = match mint {
+        Some(m) => pubkeys
+            .iter()
+            .map(|pk| {
+                crate::pump::pdas::associated_token_address_with_program(
+                    pk,
                     &m,
                     &crate::pump::pdas::TOKEN_2022_PROGRAM_ID,
-                );
-                rpc.get_token_account_balance(&ata)
-                    .await
-                    .ok()
-                    .and_then(|b| b.amount.parse::<u64>().ok())
-                    .unwrap_or(0)
+                )
+            })
+            .collect(),
+        None => Vec::new(),
+    };
+    // Both fetches at once: they are independent, so serialising them would
+    // double the refresh latency for no reason.
+    let (lamports, token_units) = tokio::join!(
+        crate::wallets::fetch_lamports(rpc, &pubkeys),
+        async {
+            if atas.is_empty() {
+                Ok(Vec::new())
+            } else {
+                crate::wallets::fetch_token_amounts(rpc, &atas).await
             }
-            None => 0,
-        };
+        }
+    );
+    let lamports = lamports.unwrap_or_default();
+    let token_units = token_units.unwrap_or_default();
+    let mut wallets = Vec::with_capacity(cfg.buyers.len());
+    for (i, pk) in pubkeys.into_iter().enumerate() {
         wallets.push(WalletRow {
             index: i,
             pubkey: pk,
-            sol,
-            token_units,
+            #[allow(clippy::cast_precision_loss)]
+            sol: lamports.get(i).copied().unwrap_or(0) as f64 / 1e9,
+            token_units: token_units.get(i).copied().unwrap_or(0),
         });
     }
     let cost = match positions.first() {
