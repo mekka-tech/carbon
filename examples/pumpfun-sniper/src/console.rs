@@ -623,7 +623,16 @@ pub async fn run(
         live: !cfg.dry_run,
         feed: format!("{:?}", cfg.datasource).to_lowercase(),
         routes: format!("{:?}", cfg.send_paths),
-        buy_sol: cfg.buyers.first().map(|b| b.buy_amount_lamports).unwrap_or(0) as f64 / 1e9,
+        // Total across every wallet, not wallet #0's share. In BUY_SIZING=
+        // balance the thirty sizes differ by design, so a single sample is
+        // wrong for twenty-nine of them and hides total exposure — which is the
+        // number an operator actually needs while a launch is running.
+        buy_sol: cfg
+            .buyers
+            .iter()
+            .map(|b| b.buy_amount_lamports())
+            .fold(0u64, u64::saturating_add) as f64
+            / 1e9,
         ..Default::default()
     }));
     {
@@ -943,9 +952,18 @@ pub async fn run(
                             let (w, i, before, sig) =
                                 (o.wallet, o.index, o.balance_before, sig.clone());
                             let mint = position.mint;
+                            let cfg_refresh = Arc::clone(&cfg);
                             tokio::spawn(async move {
-                                sell::report_proceeds(rpc, w, i, before, sig).await;
+                                sell::report_proceeds(Arc::clone(&rpc), w, i, before, sig).await;
                                 in_flight.write().await.remove(&(w, mint));
+                                // A sell puts SOL back, so the wallet can buy
+                                // again. `report_proceeds` has already waited
+                                // for confirmation, so the balance it reads is
+                                // settled. Without this the wallet stays sized
+                                // at whatever it held before the sell — which
+                                // after a snipe is ~0 — and it sits out the
+                                // next launch despite being funded.
+                                crate::wallets::refresh_buy_sizes(&cfg_refresh, &rpc).await;
                             });
                         }
                         // Nothing was sent, so nothing is confirming. Only

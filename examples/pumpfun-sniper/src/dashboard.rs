@@ -197,6 +197,16 @@ pub async fn refresh(
     s.mint = mint;
     s.cost_lamports = cost;
     s.sol_usd = usd;
+    // Recomputed every refresh, not captured once at console start: in
+    // BUY_SIZING=balance the per-wallet sizes are re-derived after each
+    // confirmed snipe and sell, so a value read at startup goes stale the
+    // first time anything lands.
+    s.buy_sol = cfg
+        .buyers
+        .iter()
+        .map(|b| b.buy_amount_lamports())
+        .fold(0u64, u64::saturating_add) as f64
+        / 1e9;
     s.last_refresh_unix = now;
     s.refreshing = false;
 }
@@ -232,7 +242,7 @@ pub fn render(snapshot: &Snapshot, market: Option<&crate::market::Market>) -> Ve
         }
     }
     out.push(format!(
-        "  feed {}   routes {}   buy {:.3} SOL x{}   {}",
+        "  feed {}   routes {}   buy {:.3} SOL total across {}   {}",
         snapshot.feed,
         snapshot.routes,
         snapshot.buy_sol,

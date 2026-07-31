@@ -98,7 +98,13 @@ fn resolve_market_feed(datasource: DatasourceKind, market_geyser_url: Option<&st
 /// One buyer wallet plus its per-wallet dispatch parameters.
 pub struct Buyer {
     pub keypair: Keypair,
-    pub buy_amount_lamports: u64,
+    /// Lamports this wallet spends on a snipe.
+    ///
+    /// Atomic because in `BuySizing::Balance` mode it is derived from the
+    /// wallet's live balance, which is only known after the Config is built
+    /// and wrapped in an `Arc`. A relaxed load on the hot path is free, and it
+    /// leaves room to re-derive between snipes.
+    buy_amount_lamports: std::sync::atomic::AtomicU64,
     pub priority_fee_micro_lamports: u64,
     /// Index into `Config::fast_providers`: which fast/anti-MEV endpoint this
     /// wallet's transaction is built and submitted for (its tip is baked in at
@@ -106,7 +112,42 @@ pub struct Buyer {
     pub provider: Option<usize>,
 }
 
+impl Buyer {
+    pub fn buy_amount_lamports(&self) -> u64 {
+        self.buy_amount_lamports
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn set_buy_amount_lamports(&self, lamports: u64) {
+        self.buy_amount_lamports
+            .store(lamports, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// How each wallet's buy size is decided.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuySizing {
+    /// Every wallet spends `BUY_AMOUNT_SOL`.
+    Fixed,
+    /// Each wallet spends a random `BUY_BALANCE_PCT_MIN`..`BUY_BALANCE_PCT_MAX`
+    /// percent of its own spendable balance (balance minus the fee reserve).
+    ///
+    /// This is the setting that makes thirty buys look like thirty people.
+    /// The amounts inherit the variance already present in the funding — which
+    /// was jittered, and spread over hours or days — so no two wallets buy the
+    /// same number, and each one apes very nearly everything it holds, which is
+    /// what an organic retail buyer does. Fixed mode emits thirty byte-
+    /// identical buys in one block, which is the literal definition of the
+    /// cluster every terminal scans for.
+    Balance,
+}
+
 pub struct Config {
+    /// How each wallet's buy size is decided. `BUY_SIZING`, default `fixed`.
+    pub buy_sizing: BuySizing,
+    /// Percentage band of spendable balance to buy with in `BuySizing::Balance`.
+    pub buy_balance_pct_min: u64,
+    pub buy_balance_pct_max: u64,
     /// Which feed creates are detected on. `DATASOURCE`, default `yellowstone`.
     pub datasource: DatasourceKind,
     /// Required when `datasource` is `Yellowstone`.
@@ -277,12 +318,65 @@ impl Config {
         // Wallets are dealt round-robin across the configured fast providers,
         // so the 30 buys arrive at the leader over several independent routes.
         let use_fast = send_paths.contains(&SendPath::Fast) && !fast_providers.is_empty();
+        // Per-wallet buy size spread. Thirty buys of a byte-identical amount,
+        // in one block, is the strongest cluster signature the sniper can
+        // emit — stronger than anything in the funding graph, and exactly what
+        // a slot-window bundle scanner keys on. Organic buyers land on
+        // scattered sizes; thirty equal ones do not occur naturally.
+        //
+        // How buy sizes are decided. `balance` is the mode that makes thirty
+        // buys look like thirty people: each wallet spends nearly all of what
+        // it holds, and what it holds was funded at a jittered amount at a
+        // random time, so the variance is inherited rather than invented.
+        //
+        // The amounts cannot be computed here — they need live balances, which
+        // need RPC, which does not exist at config load. `default_buy` is a
+        // placeholder that `wallets::preflight_balances` overwrites.
+        // An empty value is how a `.env` key is normally disabled, and
+        // `SEND_MODE` already treats it as "default" — so this does too rather
+        // than aborting startup on `BUY_SIZING=`.
+        let buy_sizing = match env::var("BUY_SIZING")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "fixed".into())
+            .to_lowercase()
+            .as_str()
+        {
+            "balance" => BuySizing::Balance,
+            "fixed" => BuySizing::Fixed,
+            other => {
+                return Err(format!(
+                    "BUY_SIZING must be 'fixed' or 'balance', got '{other}'"
+                ))
+            }
+        };
+        let buy_balance_pct_min = num_env("BUY_BALANCE_PCT_MIN", 98)?;
+        let buy_balance_pct_max = num_env("BUY_BALANCE_PCT_MAX", 100)?;
+        if buy_balance_pct_min > buy_balance_pct_max {
+            return Err(format!(
+                "BUY_BALANCE_PCT_MIN ({buy_balance_pct_min}) exceeds BUY_BALANCE_PCT_MAX \
+                 ({buy_balance_pct_max})"
+            ));
+        }
+        if buy_sizing == BuySizing::Balance && buy_balance_pct_min == 0 {
+            return Err(
+                "BUY_BALANCE_PCT_MIN is 0: a wallet would buy nothing, and a 0-lamport buy still \
+                 pays priority fees and tips. Set it to the smallest share you actually want."
+                    .into(),
+            );
+        }
+        if buy_balance_pct_max > 100 {
+            return Err(format!(
+                "BUY_BALANCE_PCT_MAX is {buy_balance_pct_max}: a wallet cannot spend more than \
+                 100% of what it holds beyond its fee reserve"
+            ));
+        }
         let buyers = keypairs
             .into_iter()
             .enumerate()
             .map(|(i, keypair)| Buyer {
                 keypair,
-                buy_amount_lamports: default_buy,
+                buy_amount_lamports: std::sync::atomic::AtomicU64::new(default_buy),
                 priority_fee_micro_lamports: if n > 1 {
                     base_fee + jitter * i as u64 / (n - 1)
                 } else {
@@ -322,6 +416,9 @@ impl Config {
         }
 
         Ok(Self {
+            buy_sizing,
+            buy_balance_pct_min,
+            buy_balance_pct_max,
             datasource,
             geyser_url,
             shredstream_url,

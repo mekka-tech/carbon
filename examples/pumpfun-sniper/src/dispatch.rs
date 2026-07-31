@@ -89,7 +89,7 @@ impl BuyDispatcher {
                 state: FillState::Sent,
                 slot: None,
                 delta: None,
-                lamports: buyer.buy_amount_lamports,
+                lamports: tx.lamports,
             });
         }
     }
@@ -118,7 +118,38 @@ impl BuyDispatcher {
         // serially would add avoidable milliseconds to the hot path.
         let jito_enabled = self.cfg.send_paths.contains(&SendPath::Jito);
         let buyer_count = self.cfg.buyers.len();
-        let build_handles: Vec<_> = (0..buyer_count)
+        // A zero-amount buy is still a real transaction: it is signed, sprayed
+        // on every route, pays base fee, priority fee and tips, creates the
+        // ATAs, and is then rejected by the program (BuyZeroAmount, 6020). In
+        // Balance mode a wallet too thin to cover its own reserve is sized to
+        // zero on purpose, so this is reachable by design rather than by
+        // accident, and it must not reach the wire.
+        let active: Vec<usize> = (0..buyer_count)
+            .filter(|i| {
+                self.cfg
+                    .buyers
+                    .get(*i)
+                    .is_some_and(|b| b.buy_amount_lamports() > 0)
+            })
+            .collect();
+        if active.len() < buyer_count {
+            log::warn!(
+                "[{}] {} of {buyer_count} wallet(s) have a zero buy size and are skipped — \
+                 they cannot cover their own fee reserve",
+                signal.mint,
+                buyer_count.saturating_sub(active.len())
+            );
+        }
+        if active.is_empty() {
+            log::error!(
+                "[{}] every wallet has a zero buy size — nothing sent. Re-fund the wallets.",
+                signal.mint
+            );
+            return;
+        }
+        let build_handles: Vec<_> = active
+            .iter()
+            .copied()
             .map(|i| {
                 let cfg = Arc::clone(&self.cfg);
                 let statics = Arc::clone(&self.statics);
@@ -138,7 +169,7 @@ impl BuyDispatcher {
                         &statics,
                         &coin,
                         buyer,
-                        buyer.buy_amount_lamports,
+                        buyer.buy_amount_lamports(),
                         &curve,
                         dev_buy,
                         blockhash,
@@ -156,12 +187,20 @@ impl BuyDispatcher {
         // reason: a report that reads `buyer #n` off the position in `txs`
         // names the wrong wallet from the first failed build onwards.
         let mut buyer_indices = Vec::with_capacity(build_handles.len());
-        for (i, handle) in build_handles.into_iter().enumerate() {
+        // Parallel to `buyer_indices`: the size each surviving transaction was
+        // actually built with, captured before any refresh can change it.
+        let mut built_amounts: Vec<u64> = Vec::with_capacity(build_handles.len());
+        for (slot, handle) in build_handles.into_iter().enumerate() {
+            // `active` may be sparse, so the enumerate position is not the
+            // buyer index. Reading `cfg.buyers[slot]` here would attribute the
+            // provider and the fill record to the wrong wallet.
+            let i = active.get(slot).copied().unwrap_or(slot);
             match handle.await {
                 Ok(Ok(tx)) => {
                     txs.push(tx);
                     assignments.push(self.cfg.buyers[i].provider);
                     buyer_indices.push(i);
+                    built_amounts.push(self.cfg.buyers[i].buy_amount_lamports());
                 }
                 Ok(Err(err)) => log::error!("[{}] buyer #{i} build failed: {err}", signal.mint),
                 Err(err) => log::error!("[{}] buyer #{i} build panicked: {err}", signal.mint),
@@ -233,7 +272,7 @@ impl BuyDispatcher {
         // an attempt-1 transaction can still land while attempt 2 is in flight,
         // so dropping the earlier batch would hide a fill from both the landing
         // check and the position record.
-        let mut sent: Vec<SentTx> = collect_sent(&txs, &buyer_indices, 0);
+        let mut sent: Vec<SentTx> = collect_sent(&txs, &buyer_indices, 0, &built_amounts);
         self.record_sent(&sent, signal.mint);
         for attempt in 1..=self.cfg.snipe_retries {
             match landing_check(self.rpc.primary(), &sent).await {
@@ -260,7 +299,14 @@ impl BuyDispatcher {
             let mut retry_txs = Vec::with_capacity(buyer_count);
             let mut retry_assignments = Vec::with_capacity(buyer_count);
             let mut retry_buyers = Vec::with_capacity(buyer_count);
+            let mut retry_amounts: Vec<u64> = Vec::with_capacity(buyer_count);
             for (i, buyer) in self.cfg.buyers.iter().enumerate() {
+                // Same zero guard as the first pass. A refresh may have zeroed
+                // a wallet between attempts, and a 0-lamport retry pays fees
+                // for a transaction the program rejects outright.
+                if buyer.buy_amount_lamports() == 0 {
+                    continue;
+                }
                 let curve = if signal.launch.is_v2() {
                     self.initial_curve_v2
                 } else {
@@ -276,7 +322,7 @@ impl BuyDispatcher {
                     &self.statics,
                     &coin,
                     buyer,
-                    buyer.buy_amount_lamports,
+                    buyer.buy_amount_lamports(),
                     &curve,
                     signal.dev_buy_lamports,
                     blockhash,
@@ -286,6 +332,7 @@ impl BuyDispatcher {
                         retry_txs.push(tx);
                         retry_assignments.push(buyer.provider);
                         retry_buyers.push(i);
+                        retry_amounts.push(buyer.buy_amount_lamports());
                     }
                     Err(err) => log::error!("[{}] retry build #{i}: {err}", signal.mint),
                 }
@@ -327,7 +374,7 @@ impl BuyDispatcher {
                 break;
             }
             futures::future::join_all(retry_paths).await;
-            let retried = collect_sent(&retry_txs, &retry_buyers, attempt);
+            let retried = collect_sent(&retry_txs, &retry_buyers, attempt, &retry_amounts);
             self.record_sent(&retried, signal.mint);
             sent.extend(retried);
         }
@@ -383,8 +430,9 @@ impl BuyDispatcher {
         let create_slot = signal.create_slot;
         let mint = signal.mint;
         let fills = self.fills.clone();
+        let cfg = Arc::clone(&self.cfg);
         tokio::spawn(async move {
-            report_landing(rpc, sent, create_slot, mint, fills).await;
+            report_landing(rpc, sent, create_slot, mint, fills, cfg).await;
         });
     }
 }
@@ -399,6 +447,13 @@ struct SentTx {
     /// 0 for the first dispatch, then the retry number.
     attempt: u32,
     signature: Signature,
+    /// Lamports actually built into this transaction.
+    ///
+    /// Carried rather than re-read from the buyer: sizes are now re-derived
+    /// after every confirmed snipe and sell, so a later read returns the NEXT
+    /// launch's size and the fill log would attribute a spend that never
+    /// happened.
+    lamports: u64,
 }
 
 /// Pair each built transaction with the buyer it was built for.
@@ -406,14 +461,17 @@ fn collect_sent(
     txs: &[VersionedTransaction],
     buyer_indices: &[usize],
     attempt: u32,
+    amounts: &[u64],
 ) -> Vec<SentTx> {
     txs.iter()
         .zip(buyer_indices)
-        .filter_map(|(tx, &buyer)| {
+        .zip(amounts)
+        .filter_map(|((tx, &buyer), &lamports)| {
             tx.signatures.first().map(|&signature| SentTx {
                 buyer,
                 attempt,
                 signature,
+                lamports,
             })
         })
         .collect()
@@ -521,6 +579,11 @@ async fn report_landing(
     create_slot: u64,
     mint: solana_pubkey::Pubkey,
     fills: FillRecorder,
+    // Re-derive buy sizes once the buys have settled. Balances only change
+    // when something lands, so this is driven by confirmation rather than by a
+    // timer: no polling when nothing happened, and no window in which the next
+    // launch is sized against SOL that has already been spent.
+    cfg: Arc<Config>,
 ) {
     if sent.is_empty() {
         return;
@@ -567,6 +630,9 @@ async fn report_landing(
         for tx in &sent {
             fills.resolved(tx.signature, FillState::Unknown, None, None);
         }
+        // Refresh anyway: some fees were still paid, and a wallet that dropped
+        // below its reserve must be sized to zero before the next launch.
+        crate::wallets::refresh_buy_sizes(&cfg, &rpc).await;
         return;
     }
     let mut deltas: Vec<i64> = Vec::new();
@@ -616,6 +682,7 @@ async fn report_landing(
             "[{mint}] LANDING SUMMARY: 0/{} filled — {reverted} reverted on chain",
             sent.len()
         );
+        crate::wallets::refresh_buy_sizes(&cfg, &rpc).await;
         return;
     }
     let best = deltas.iter().copied().min().unwrap_or_default();
@@ -629,6 +696,10 @@ async fn report_landing(
             "missed block 0"
         }
     );
+
+    // Buys have landed, so the wallets are near-empty. Re-derive before the
+    // next launch can be dispatched against stale amounts.
+    crate::wallets::refresh_buy_sizes(&cfg, &rpc).await;
 }
 
 /// What one wallet is asked to spend on a manual buy, and why.
