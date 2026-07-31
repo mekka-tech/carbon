@@ -143,6 +143,13 @@ pub enum BuySizing {
 }
 
 pub struct Config {
+    /// Worst entry price a snipe will accept, as a multiple of the opening
+    /// curve price. `MAX_ENTRY_PRICE_MULTIPLE`; 0 or unset disables the floor.
+    ///
+    /// This is the only protection against being front-run: with no floor a
+    /// v2 buy sends `min_tokens_out = 1` and will fill at ANY price, so a
+    /// sandwich can take the whole position and the transaction still succeeds.
+    pub max_entry_price_multiple: f64,
     /// How each wallet's buy size is decided. `BUY_SIZING`, default `fixed`.
     pub buy_sizing: BuySizing,
     /// Percentage band of spendable balance to buy with in `BuySizing::Balance`.
@@ -416,6 +423,14 @@ impl Config {
         }
 
         Ok(Self {
+            // Off by default: the floor is only as good as the curve model
+            // behind it, and this codebase has been wrong about the v2 curve
+            // before. Prove it in SEND_MODE=simulate against real launches
+            // before trusting it with a buy.
+            max_entry_price_multiple: env::var("MAX_ENTRY_PRICE_MULTIPLE")
+                .ok()
+                .and_then(|v| v.trim().parse::<f64>().ok())
+                .unwrap_or(0.0),
             buy_sizing,
             buy_balance_pct_min,
             buy_balance_pct_max,

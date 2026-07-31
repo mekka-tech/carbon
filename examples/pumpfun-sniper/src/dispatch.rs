@@ -903,7 +903,15 @@ fn build_buy_tx(
     // from — a wrong-but-high floor only guarantees the buy fails. Set
     // V2_TRUST_QUOTE=true to re-enable the (currently wrong) modelled floor.
     let min_tokens_out = if matches!(coin, Coin::V2(_)) && !cfg.v2_trust_quote {
-        1
+        // A price CEILING rather than a quote. `min_tokens_out = 1` accepts any
+        // fill at any price, which is total frontrun exposure: a sandwich takes
+        // the position and the transaction still succeeds. A precise v2 quote
+        // is not available (see `quote::price_ceiling_min_tokens` for why the
+        // recorded 6042 diagnosis is false), but a coarse "no worse than Nx the
+        // opening price" floor needs no precision and is what actually
+        // protects the money. Losing the trade beats losing the position.
+        quote::price_ceiling_min_tokens(curve, amount_lamports, cfg.max_entry_price_multiple)
+            .unwrap_or(1)
     } else {
         quote::min_tokens_out(
             curve,

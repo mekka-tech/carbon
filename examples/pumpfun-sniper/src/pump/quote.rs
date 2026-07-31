@@ -72,6 +72,52 @@ pub fn min_tokens_out(
     }
 }
 
+/// A price ceiling for a snipe, expressed as `min_tokens_out`.
+///
+/// This is deliberately NOT a precise quote. Modelling the exact output of a
+/// v2 buy requires knowing the dev buy, the fee split and the exact semantics
+/// of `BuyExactQuoteInV2` — and the one time this codebase trusted a v2 quote
+/// it demanded 5.5x what the curve could pay and every buy died with
+/// `BuySlippageBelowMinTokensOut` (6042). The recorded explanation for that
+/// (v2 opening reserves differing from v1) is verifiably false: Global's
+/// `initial_virtual_token_reserves` is 1,073,000,000,000,000 and a live v2
+/// curve reads the same, with both quoting 30 SOL. So the real cause is
+/// unknown, and a floor built on a precise quote would be built on sand.
+///
+/// A ceiling needs none of that. It asks one coarse question: *how much worse
+/// than the opening price am I willing to fill at?* At `multiple = 3` the buy
+/// reverts if it would land at more than three times the price a buy into an
+/// untouched curve would have paid. A normal snipe — even behind a healthy dev
+/// buy and a few other snipers — fills comfortably; a buy behind someone who
+/// has pushed the curve 10x does not.
+///
+/// That is exactly the frontrun protection `min_tokens_out = 1` gives up. With
+/// no floor a sandwich can take the entire position at any price and the
+/// transaction still succeeds; losing the trade is strictly better than losing
+/// the money.
+///
+/// Returns `None` when disabled, so the caller keeps its existing behaviour.
+pub fn price_ceiling_min_tokens(
+    opening: &CurveState,
+    spendable_sol_in: u64,
+    max_price_multiple: f64,
+) -> Option<u64> {
+    if !(max_price_multiple.is_finite() && max_price_multiple >= 1.0) {
+        return None;
+    }
+    let at_open = opening.tokens_out_for_sol(spendable_sol_in);
+    if at_open == 0 {
+        return None;
+    }
+    // Paying `multiple` times the opening price means receiving `1/multiple`
+    // of the tokens, so the floor is the opening output divided by it.
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let floor = ((at_open as f64) / max_price_multiple) as u64;
+    // Never return 0: the program rejects a zero minimum with BuyZeroAmount
+    // (6020), which would fail the buy outright rather than leave it unguarded.
+    Some(floor.max(1))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,5 +181,94 @@ mod tests {
     #[test]
     fn zero_input_is_zero_output() {
         assert_eq!(fresh_curve().tokens_out_for_sol(0), 0);
+    }
+}
+
+#[cfg(test)]
+mod ceiling_tests {
+    use super::*;
+
+    /// Mainnet opening curve, verified against Global and a live v2 curve.
+    fn opening() -> CurveState {
+        CurveState {
+            virtual_sol_reserves: 30_000_000_000,
+            virtual_token_reserves: 1_073_000_000_000_000,
+            protocol_fee_bps: 95,
+            creator_fee_bps: 5,
+        }
+    }
+
+    #[test]
+    fn the_floor_is_the_opening_output_divided_by_the_multiple() {
+        let buy = 100_000_000; // 0.1 SOL
+        let at_open = opening().tokens_out_for_sol(buy);
+        let floor = price_ceiling_min_tokens(&opening(), buy, 3.0).unwrap();
+        let expected = at_open / 3;
+        assert!(
+            floor.abs_diff(expected) <= 1,
+            "floor {floor} should be ~{expected}"
+        );
+        // And it must be well below the opening output, or a normal snipe
+        // behind a dev buy would revert.
+        assert!(floor < at_open);
+    }
+
+    #[test]
+    fn a_multiple_of_one_demands_the_full_opening_price() {
+        let buy = 100_000_000;
+        let at_open = opening().tokens_out_for_sol(buy);
+        let floor = price_ceiling_min_tokens(&opening(), buy, 1.0).unwrap();
+        assert!(floor.abs_diff(at_open) <= 1);
+    }
+
+    #[test]
+    fn nonsense_multiples_disable_the_ceiling_rather_than_guessing() {
+        // Below 1.0 would demand MORE tokens than an untouched curve can pay,
+        // which fails every buy — the 6042 failure mode. Refuse instead.
+        for m in [0.0, 0.5, -1.0, f64::NAN, f64::INFINITY] {
+            assert!(
+                price_ceiling_min_tokens(&opening(), 100_000_000, m).is_none(),
+                "multiple {m} should disable, not produce a floor"
+            );
+        }
+    }
+
+    #[test]
+    fn the_floor_is_never_zero() {
+        // 0 would be rejected on-chain as BuyZeroAmount (6020), failing the buy
+        // outright rather than leaving it unguarded. The multiple has to exceed
+        // the opening output for the division to floor to zero at all — 1,000
+        // lamports still buys ~35M base units, so a merely large multiple is
+        // not enough to exercise this.
+        let buy = 1_000;
+        let at_open = opening().tokens_out_for_sol(buy);
+        let floor = price_ceiling_min_tokens(&opening(), buy, (at_open as f64) * 2.0);
+        assert_eq!(floor, Some(1), "at_open was {at_open}");
+    }
+
+    #[test]
+    fn a_pushed_curve_falls_below_the_floor() {
+        // Someone front-runs with 200 SOL; our 0.1 SOL now buys far less.
+        let buy = 100_000_000;
+        let floor = price_ceiling_min_tokens(&opening(), buy, 3.0).unwrap();
+        let pushed = opening().after_buy(200_000_000_000);
+        let actual = pushed.tokens_out_for_sol(buy);
+        assert!(
+            actual < floor,
+            "a 200 SOL frontrun should breach a 3x ceiling: got {actual}, floor {floor}"
+        );
+    }
+
+    #[test]
+    fn an_ordinary_dev_buy_still_fills() {
+        // The protection is worthless if it rejects normal launches. A 2 SOL
+        // dev buy ahead of us must stay comfortably above a 3x ceiling.
+        let buy = 100_000_000;
+        let floor = price_ceiling_min_tokens(&opening(), buy, 3.0).unwrap();
+        let after_dev = opening().after_buy(2_000_000_000);
+        assert!(
+            after_dev.tokens_out_for_sol(buy) > floor,
+            "a 2 SOL dev buy must not trip a 3x ceiling"
+        );
     }
 }
