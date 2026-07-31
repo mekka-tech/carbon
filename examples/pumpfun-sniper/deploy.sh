@@ -41,6 +41,11 @@ provision() {
       git clone --branch '$BRANCH' '$REPO_URL' '$DIR'
     fi
     cd '$DIR'
+    # misc/jito-protos/protos is a submodule (jito-labs/mev-protos). Without
+    # this the directory clones EMPTY and the build dies in the jito-protos
+    # build script with 'Could not make proto path relative' — which reads like
+    # a protoc problem and is not one.
+    git submodule update --init --recursive
     cargo test -p pumpfun-sniper-example
     cargo build --release -p pumpfun-sniper-example
     test -f .env || cp examples/pumpfun-sniper/.env.example .env
