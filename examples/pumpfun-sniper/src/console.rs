@@ -475,12 +475,158 @@ fn parse_wallet_set(raw: &str) -> Result<WalletSel, String> {
     Ok(WalletSel::Only(out))
 }
 
-/// A wallet index is an index, so it is parsed as an integer and anything else
-/// is refused. Nothing here may fall back to a lenient numeric parse.
+/// Who else is holding this token besides us.
+///
+/// Answered from on-chain supply rather than a holder index: `total minted`
+/// minus `what the curve still holds` is what has been sold, and if our wallets
+/// hold essentially all of that, nobody else is in the coin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Holders {
+    /// Our wallets hold effectively everything that has left the curve.
+    OnlyUs,
+    /// Somebody else is holding.
+    Others,
+    /// Could not be established. Treated as `Others` everywhere it gates a
+    /// sell: "I could not check" must never unlock the larger exit.
+    Unknown,
+}
+
+/// Fraction of the sold supply we must hold to count as the only holders.
+/// Not 100%: dust, rounding and a stray test buy should not flip the verdict.
+const SOLE_HOLDER_THRESHOLD: f64 = 0.995;
+
+/// Establish whether anyone else holds `mint`.
+async fn holders_of(
+    cfg: &Config,
+    rpc: &Arc<RpcClient>,
+    mint: &Pubkey,
+    bonding_curve: &Pubkey,
+) -> Holders {
+    let Ok(supply) = rpc.get_token_supply(mint).await else {
+        return Holders::Unknown;
+    };
+    let Ok(total) = supply.amount.parse::<u128>() else {
+        return Holders::Unknown;
+    };
+    // What the curve still holds has not been sold to anyone.
+    let curve_ata = crate::pump::pdas::associated_token_address_with_program(
+        bonding_curve,
+        mint,
+        &crate::pump::pdas::TOKEN_2022_PROGRAM_ID,
+    );
+    let curve_held: u128 = rpc
+        .get_token_account_balance(&curve_ata)
+        .await
+        .ok()
+        .and_then(|b| b.amount.parse::<u128>().ok())
+        .unwrap_or(0);
+    let sold = total.saturating_sub(curve_held);
+    if sold == 0 {
+        // Nothing has left the curve at all, so there is nobody to dump on.
+        return Holders::OnlyUs;
+    }
+    let mut ours: u128 = 0;
+    for buyer in &cfg.buyers {
+        let ata = crate::pump::pdas::associated_token_address_with_program(
+            &buyer.keypair.pubkey(),
+            mint,
+            &crate::pump::pdas::TOKEN_2022_PROGRAM_ID,
+        );
+        // A failed read must not be counted as zero — that would understate our
+        // share and wrongly report Others, which only ever tightens the guard.
+        match rpc.get_token_account_balance(&ata).await {
+            Ok(b) => ours = ours.saturating_add(b.amount.parse::<u128>().unwrap_or(0)),
+            Err(_) => return Holders::Unknown,
+        }
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let share = ours as f64 / sold as f64;
+    if share >= SOLE_HOLDER_THRESHOLD {
+        Holders::OnlyUs
+    } else {
+        Holders::Others
+    }
+}
+
+/// Refuse a single command that would exit the entire position at once.
+///
+/// Dumping every wallet's full bag into the curve in one or two blocks is the
+/// chart event this operator does not want to cause — and it is also self
+/// inflicted slippage, because the later sells in the batch walk down a price
+/// the earlier ones just moved.
+///
+/// The check is on the EFFECT, not the spelling. `s 100`, `s all 100`,
+/// `s 1-30 100` and `s 0,1,2,...,29 100` are the same instruction, and a guard
+/// that only catches one of them is decoration. So it fires whenever the
+/// resolved target set covers every configured wallet at 100%.
+///
+/// Exiting fully is still possible — in tranches, which is the point:
+///   s 0-9 100 go     s 10-19 100 go     s 20-29 100 go
+fn refuse_full_exit(
+    targets: &[usize],
+    total: usize,
+    pct: f64,
+    holders: Holders,
+) -> Option<String> {
+    if total == 0 {
+        return None;
+    }
+    // With nobody else in the coin there is no chart to rug and no exit
+    // liquidity to race — during a test the wallets ARE the market. Anything
+    // other than a definite OnlyUs keeps the cap, so a failed check never
+    // unlocks the larger sell.
+    let cap = if holders == Holders::OnlyUs {
+        100.0
+    } else {
+        MAX_ALL_WALLET_SELL_PCT
+    };
+    if pct <= cap {
+        return None;
+    }
+    let mut covered: Vec<usize> = targets.to_vec();
+    covered.sort_unstable();
+    covered.dedup();
+    if covered.len() < total {
+        return None;
+    }
+    Some(format!(
+        "refusing {pct}% from all {total} wallets in one command — the cap is {cap}% while \
+         other people hold this token, because dumping the whole position into the curve at \
+         once is the chart event you are trying not to cause, and the later sells eat the \
+         price the earlier ones moved. Exit in tranches: 's 1-10 100 go' then 's 11-20 100 go'. \
+         Selecting fewer wallets is never capped."
+    ))
+}
+
+/// Cap on a single command that targets every wallet, while anyone else holds
+/// the token. Selecting a subset is deliberately unrestricted — the guard is
+/// against one keystroke emptying everything, not against exiting.
+const MAX_ALL_WALLET_SELL_PCT: f64 = 50.0;
+
+/// Parse a wallet number as the OPERATOR writes it — 1-based — and return the
+/// 0-based index the rest of the code indexes `cfg.buyers` with.
+///
+/// Wallets are numbered 1..=N everywhere a human sees them, matching the
+/// `buyer-01.json`..`buyer-30.json` filenames they load from. Keeping the
+/// internal representation 0-based means every `Vec` access stays ordinary;
+/// the translation happens here and in `display_index`, and nowhere else.
+///
+/// Anything that is not a whole number is refused rather than coerced. The bug
+/// this replaces parsed the index as `f64` and cast with `as usize`, which
+/// SATURATES: `s -1 50 go` resolved to a wallet nobody named.
 fn parse_wallet_index(raw: &str) -> Result<usize, String> {
-    raw.trim().parse::<usize>().map_err(|_| {
-        format!("wallet must be a whole number (0, 1, 2, …), got '{raw}' — refusing to guess")
-    })
+    let n = raw.trim().parse::<usize>().map_err(|_| {
+        format!("wallet must be a whole number (1, 2, 3, …), got '{raw}' — refusing to guess")
+    })?;
+    // 0 is the one number a 1-based operator can type that would silently mean
+    // a real wallet if it were decremented.
+    n.checked_sub(1)
+        .ok_or_else(|| "wallets are numbered from 1, not 0".to_string())
+}
+
+/// The number to show an operator for a 0-based buyer index.
+pub fn display_index(i: usize) -> usize {
+    i.saturating_add(1)
 }
 
 fn parse_pct(raw: &str) -> Result<f64, String> {
@@ -544,7 +690,7 @@ impl Drop for TerminalGuard {
 fn summarise(outcomes: &[SellOutcome]) {
     for o in outcomes {
         match (&o.error, &o.signature) {
-            (Some(err), _) => log::warn!("#{} {}: {err}", o.index, o.wallet),
+            (Some(err), _) => log::warn!("#{} {}: {err}", display_index(o.index), o.wallet),
             (None, Some(sig)) => log::info!(
                 "#{} SOLD {} tokens  sig {}",
                 o.index,
@@ -884,6 +1030,28 @@ pub async fn run(
                         continue;
                     }
                 };
+                // Checked before the in-flight claim and before any RPC, so a
+                // refused command costs nothing and locks nothing.
+                // Only worth the RPC when the command could actually trip the
+                // cap: every wallet, above the threshold.
+                let holders = if targets.len() >= cfg.buyers.len()
+                    && cmd.pct > MAX_ALL_WALLET_SELL_PCT
+                {
+                    holders_of(&cfg, &rpc, &position.mint, &position.bonding_curve).await
+                } else {
+                    Holders::Unknown
+                };
+                if let Some(refusal) =
+                    refuse_full_exit(&targets, cfg.buyers.len(), cmd.pct, holders)
+                {
+                    log::warn!("{refusal}");
+                    continue;
+                }
+                if holders == Holders::OnlyUs && cmd.pct > MAX_ALL_WALLET_SELL_PCT {
+                    log::info!(
+                        "no other holders detected — full-size exit allowed for this command"
+                    );
+                }
                 // Claim only for real sends: a simulation changes no balance and
                 // must not lock a wallet out of the sell it is rehearsing.
                 if cmd.execute {
@@ -893,8 +1061,9 @@ pub async fn run(
                         .partition(|n| guard.insert((cfg.buyers[*n].keypair.pubkey(), position.mint)));
                     for n in busy {
                         log::warn!(
-                            "#{n} skipped — a sell is still confirming, so its balance would be \
+                            "#{} skipped — a sell is still confirming, so its balance would be \
                              read pre-sell and this would sell {}% of the ORIGINAL position again",
+                            display_index(n),
                             cmd.pct
                         );
                     }
@@ -1068,21 +1237,23 @@ async fn cmd_buy(
             continue;
         };
         let Some(balance) = balance else {
-            log::warn!("#{n} skipped — could not read its SOL balance");
+            log::warn!("#{} skipped — could not read its SOL balance", display_index(*n));
             continue;
         };
         let reserve = crate::dispatch::gas_reserve(cfg, buyer);
         let spend = crate::dispatch::size_buy(balance, reserve, pct);
         if spend == 0 {
             log::warn!(
-                "#{n} skipped — {:.6} SOL balance does not cover the {:.6} SOL fee reserve",
+                "#{} skipped — {:.6} SOL balance does not cover the {:.6} SOL fee reserve",
+                display_index(*n),
                 lamports_to_sol(balance),
                 lamports_to_sol(reserve)
             );
             continue;
         }
         log::info!(
-            "#{n} buy {:.6} SOL (balance {:.6}, reserve {:.6})",
+            "#{} buy {:.6} SOL (balance {:.6}, reserve {:.6})",
+            display_index(*n),
             lamports_to_sol(spend),
             lamports_to_sol(balance),
             lamports_to_sol(reserve)
@@ -1121,9 +1292,9 @@ async fn cmd_buy(
     .await;
     for (n, result) in results {
         match result {
-            Ok(sig) if execute => log::info!("#{n} SENT {sig}"),
-            Ok(_) => log::info!("#{n} built (simulate only — add 'go' to send)"),
-            Err(err) => log::error!("#{n} BUY FAILED: {err}"),
+            Ok(sig) if execute => log::info!("#{} SENT {sig}", display_index(n)),
+            Ok(_) => log::info!("#{} built (simulate only — add 'go' to send)", display_index(n)),
+            Err(err) => log::error!("#{} BUY FAILED: {err}", display_index(n)),
         }
     }
 }
@@ -1162,7 +1333,7 @@ async fn cmd_fills(
         };
         log::info!(
             "  #{} {} attempt={} {} {:.6} SOL {} {}",
-            fill.buyer,
+            display_index(fill.buyer),
             fill.wallet,
             fill.attempt,
             fill.state.label(),
@@ -1200,6 +1371,9 @@ fn print_help() {
         "  status                  cost, live price, mcap, P&L (% and USD)",
         "  market                  live price / volume / net flow",
         "  s <pct>                 sell pct% of the position, ALL wallets  (simulate)",
+        "     >50% from ALL wallets is REFUSED while others hold — exit in tranches",
+        "     (allowed in full when nobody else holds the token, e.g. a test)",
+        "  wallets are numbered 1..N, matching buyer-01.json..buyer-NN.json",
         "  s <wallets> <pct>       sell pct% from chosen wallets          (simulate)",
         "  s <wallets> <pct> go    same, but ACTUALLY SEND",
         "  b <pct>                 buy with pct% of each wallet's SOL, ALL (simulate)",
@@ -1564,7 +1738,7 @@ mod tests {
         assert_eq!(
             parse("s 1 10").unwrap(),
             SellCommand {
-                wallets: WalletSel::Only(vec![1]),
+                wallets: WalletSel::Only(vec![0]),
                 pct: 10.0,
                 execute: false
             }
@@ -1572,7 +1746,7 @@ mod tests {
         assert_eq!(
             parse("s 3 100 go").unwrap(),
             SellCommand {
-                wallets: WalletSel::Only(vec![3]),
+                wallets: WalletSel::Only(vec![2]),
                 pct: 100.0,
                 execute: true
             }
@@ -1585,26 +1759,91 @@ mod tests {
     }
 
     #[test]
+    fn wallet_numbers_are_one_based_for_the_operator() {
+        // Files are buyer-01..buyer-30, so "wallet 1" must mean buyer-01.
+        // Internally everything stays 0-based for ordinary Vec access.
+        assert_eq!(parse("s 1 10").unwrap().wallets, WalletSel::Only(vec![0]));
+        assert_eq!(
+            parse("s 1,2,3 10").unwrap().wallets,
+            WalletSel::Only(vec![0, 1, 2])
+        );
+        assert_eq!(
+            parse("s 1-3 10").unwrap().wallets,
+            WalletSel::Only(vec![0, 1, 2])
+        );
+        assert_eq!(display_index(0), 1);
+    }
+
+    #[test]
+    fn wallet_zero_is_refused_rather_than_wrapping() {
+        // 0 is the one number a 1-based operator can type that would silently
+        // mean a real wallet if it were decremented.
+        let err = parse("s 0 50 go").expect_err("wallet 0 must be refused");
+        assert!(err.contains("numbered from 1"), "{err}");
+    }
+
+    #[test]
+    fn a_full_exit_from_every_wallet_is_refused_however_it_is_spelled() {
+        // The rug this guards against does not care about syntax: these are all
+        // the same instruction, and catching only one of them is decoration.
+        let all: Vec<usize> = (0..30).collect();
+        for targets in [all.clone(), (0..30).rev().collect(), {
+            let mut d = all.clone();
+            d.extend(all.clone()); // duplicates must not defeat the count
+            d
+        }] {
+            assert!(
+                refuse_full_exit(&targets, 30, 100.0, Holders::Others).is_some(),
+                "a full exit slipped through"
+            );
+        }
+    }
+
+    #[test]
+    fn the_cap_only_binds_when_someone_else_holds() {
+        let all: Vec<usize> = (0..30).collect();
+        // During a test we are the market — there is no chart to rug.
+        assert!(refuse_full_exit(&all, 30, 100.0, Holders::OnlyUs).is_none());
+        // Anything less certain keeps the cap. "I could not check" must never
+        // unlock the larger sell.
+        assert!(refuse_full_exit(&all, 30, 100.0, Holders::Unknown).is_some());
+        assert!(refuse_full_exit(&all, 30, 100.0, Holders::Others).is_some());
+        // At or below the cap, unrestricted.
+        assert!(refuse_full_exit(&all, 30, 50.0, Holders::Others).is_none());
+        assert!(refuse_full_exit(&all, 30, 49.9, Holders::Others).is_none());
+        assert!(refuse_full_exit(&all, 30, 50.1, Holders::Others).is_some());
+    }
+
+    #[test]
+    fn selecting_a_subset_is_never_capped() {
+        // The guard is against one keystroke emptying everything, not against
+        // exiting. Tranches must always work.
+        let subset: Vec<usize> = (0..10).collect();
+        assert!(refuse_full_exit(&subset, 30, 100.0, Holders::Others).is_none());
+    }
+
+    #[test]
     fn a_comma_list_selects_those_wallets() {
         assert_eq!(
             parse("s 1,2 10").unwrap().wallets,
-            WalletSel::Only(vec![1, 2])
+            WalletSel::Only(vec![0, 1])
         );
         assert_eq!(
             parse_b("b 1,2,3,4 100 go").unwrap().wallets,
-            WalletSel::Only(vec![1, 2, 3, 4])
+            WalletSel::Only(vec![0, 1, 2, 3])
         );
     }
 
     #[test]
     fn a_range_expands_inclusively() {
+        // Operator writes 1-based; internal indices are 0-based.
         assert_eq!(
             parse("s 1-3 50").unwrap().wallets,
-            WalletSel::Only(vec![1, 2, 3])
+            WalletSel::Only(vec![0, 1, 2])
         );
         // Mixed forms, because an operator will write both.
         assert_eq!(
-            parse_b("b 0,2-4 25").unwrap().wallets,
+            parse_b("b 1,3-5 25").unwrap().wallets,
             WalletSel::Only(vec![0, 2, 3, 4])
         );
     }
@@ -1615,7 +1854,7 @@ mod tests {
         // pre-sell balance, so the wallet would sell the percentage twice.
         assert_eq!(
             parse("s 2,1,2,1-2 50").unwrap().wallets,
-            WalletSel::Only(vec![1, 2])
+            WalletSel::Only(vec![0, 1])
         );
     }
 
