@@ -37,6 +37,11 @@ use {
     std::sync::Arc,
 };
 
+/// Mirrors `console::MAX_ALL_WALLET_SELL_PCT`. Duplicated rather than shared
+/// because binaries cannot import each other's modules without a lib target;
+/// if one moves, move both.
+const MAX_ALL_WALLET_SELL_PCT: f64 = 50.0;
+
 const PUMP: Pubkey = Pubkey::from_str_const("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
 const FEE_PROGRAM: Pubkey = Pubkey::from_str_const("pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ");
 const TOKEN: Pubkey = Pubkey::from_str_const("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -290,6 +295,24 @@ fn parse_args() -> Result<Args, String> {
     let pct = pct
         .or_else(|| std::env::var("SELL_PCT").ok().and_then(|v| v.parse().ok()))
         .unwrap_or(100.0);
+
+    // A full exit from every wallet is refused here exactly as it is in the
+    // console. This binary is a separate process with its own argument parser,
+    // so without this it is a complete bypass of that guard — `sell_all
+    // --pct 100 --execute` empties the whole position in one command, which is
+    // the chart event the console refuses to cause.
+    //
+    // No holder check here: this tool has no market context and a conservative
+    // refusal is the right default for a bypass path. Use the console when the
+    // cap genuinely should lift (a test where nobody else holds the coin) — it
+    // verifies that on chain rather than taking the operator's word for it.
+    if matches!(target, Target::All) && pct > MAX_ALL_WALLET_SELL_PCT {
+        return Err(format!(
+            "refusing --pct {pct} across ALL wallets: the cap is {MAX_ALL_WALLET_SELL_PCT}%. \
+             Sell a subset with --wallet, lower --pct, or use the interactive console, which \
+             lifts the cap only after confirming on chain that nobody else holds the token."
+        ));
+    }
     if !(0.0..=100.0).contains(&pct) {
         return Err(format!("percentage must be 0-100, got {pct}"));
     }

@@ -496,17 +496,19 @@ pub enum Holders {
 const SOLE_HOLDER_THRESHOLD: f64 = 0.995;
 
 /// Establish whether anyone else holds `mint`.
+/// Returns the verdict plus per-wallet token units, so the caller can size a
+/// command's impact without a second round of RPC.
 async fn holders_of(
     cfg: &Config,
     rpc: &Arc<RpcClient>,
     mint: &Pubkey,
     bonding_curve: &Pubkey,
-) -> Holders {
+) -> (Holders, Vec<u64>) {
     let Ok(supply) = rpc.get_token_supply(mint).await else {
-        return Holders::Unknown;
+        return (Holders::Unknown, Vec::new());
     };
     let Ok(total) = supply.amount.parse::<u128>() else {
-        return Holders::Unknown;
+        return (Holders::Unknown, Vec::new());
     };
     // What the curve still holds has not been sold to anyone.
     let curve_ata = crate::pump::pdas::associated_token_address_with_program(
@@ -521,11 +523,8 @@ async fn holders_of(
         .and_then(|b| b.amount.parse::<u128>().ok())
         .unwrap_or(0);
     let sold = total.saturating_sub(curve_held);
-    if sold == 0 {
-        // Nothing has left the curve at all, so there is nobody to dump on.
-        return Holders::OnlyUs;
-    }
     let mut ours: u128 = 0;
+    let mut per_wallet: Vec<u64> = Vec::with_capacity(cfg.buyers.len());
     for buyer in &cfg.buyers {
         let ata = crate::pump::pdas::associated_token_address_with_program(
             &buyer.keypair.pubkey(),
@@ -534,18 +533,30 @@ async fn holders_of(
         );
         // A failed read must not be counted as zero — that would understate our
         // share and wrongly report Others, which only ever tightens the guard.
-        match rpc.get_token_account_balance(&ata).await {
-            Ok(b) => ours = ours.saturating_add(b.amount.parse::<u128>().unwrap_or(0)),
-            Err(_) => return Holders::Unknown,
-        }
+        // A token account that does not exist yet reads as an error and is a
+        // genuine zero, not an unknown — a wallet whose buy never landed simply
+        // holds nothing. Only treat it as unknown if the mint itself resolved.
+        let units = rpc
+            .get_token_account_balance(&ata)
+            .await
+            .ok()
+            .and_then(|b| b.amount.parse::<u64>().ok())
+            .unwrap_or(0);
+        per_wallet.push(units);
+        ours = ours.saturating_add(u128::from(units));
+    }
+    if sold == 0 {
+        // Nothing has left the curve at all, so there is nobody to dump on.
+        return (Holders::OnlyUs, per_wallet);
     }
     #[allow(clippy::cast_precision_loss)]
     let share = ours as f64 / sold as f64;
-    if share >= SOLE_HOLDER_THRESHOLD {
+    let verdict = if share >= SOLE_HOLDER_THRESHOLD {
         Holders::OnlyUs
     } else {
         Holders::Others
-    }
+    };
+    (verdict, per_wallet)
 }
 
 /// Refuse a single command that would exit the entire position at once.
@@ -561,14 +572,16 @@ async fn holders_of(
 /// resolved target set covers every configured wallet at 100%.
 ///
 /// Exiting fully is still possible — in tranches, which is the point:
-///   s 0-9 100 go     s 10-19 100 go     s 20-29 100 go
+///   s 1-10 100 go    s 11-20 100 go    (the last tranche is refused)
+/// `targeted_units` is what the selected wallets hold; `position_units` is what
+/// every wallet holds, targeted or not.
 fn refuse_full_exit(
-    targets: &[usize],
-    total: usize,
+    targeted_units: u64,
+    position_units: u64,
     pct: f64,
     holders: Holders,
 ) -> Option<String> {
-    if total == 0 {
+    if position_units == 0 {
         return None;
     }
     // With nobody else in the coin there is no chart to rug and no exit
@@ -580,27 +593,37 @@ fn refuse_full_exit(
     } else {
         MAX_ALL_WALLET_SELL_PCT
     };
-    if pct <= cap {
+    // What this command actually takes out of the position, as a share of what
+    // is still held. Counting WALLETS instead of units is what let three
+    // tranches empty everything: `s 1-10 100`, `s 11-20 100`, `s 21-30 100`
+    // each targets a subset and each looked harmless, while together they are
+    // the full exit the guard exists to prevent — and three quick commands is
+    // precisely what a panicking operator types.
+    //
+    // Measured against units, the same ladder is 33%, then 50% of what is
+    // left, then 100% of what is left — and only the last one is refused. The
+    // series converges on zero without reaching it, so laddering out stays
+    // available and a single command can never finish the job.
+    #[allow(clippy::cast_precision_loss)]
+    let share_of_position = targeted_units as f64 / position_units as f64;
+    let impact = share_of_position * pct;
+    if impact <= cap {
         return None;
     }
-    let mut covered: Vec<usize> = targets.to_vec();
-    covered.sort_unstable();
-    covered.dedup();
-    if covered.len() < total {
-        return None;
-    }
+    let pct = impact;
     Some(format!(
-        "refusing {pct}% from all {total} wallets in one command — the cap is {cap}% while \
-         other people hold this token, because dumping the whole position into the curve at \
-         once is the chart event you are trying not to cause, and the later sells eat the \
-         price the earlier ones moved. Exit in tranches: 's 1-10 100 go' then 's 11-20 100 go'. \
-         Selecting fewer wallets is never capped."
+        "refusing — this command would sell {pct:.0}% of the remaining position, and the cap is \
+         {cap:.0}% while other people hold this token. Dumping into the curve at once is the \
+         chart event you are trying not to cause, and the later sells eat the price the earlier \
+         ones moved. Take a smaller slice: fewer wallets, or a lower percentage. The cap is on \
+         the SHARE OF WHAT IS LEFT, so laddering out always works — it just never empties in one \
+         command."
     ))
 }
 
-/// Cap on a single command that targets every wallet, while anyone else holds
-/// the token. Selecting a subset is deliberately unrestricted — the guard is
-/// against one keystroke emptying everything, not against exiting.
+/// Most of the remaining position a single command may sell while anyone else
+/// holds the token. Applies to the units sold, not the wallets touched, so no
+/// combination of subsets slips past it.
 const MAX_ALL_WALLET_SELL_PCT: f64 = 50.0;
 
 /// Parse a wallet number as the OPERATOR writes it — 1-based — and return the
@@ -1032,25 +1055,25 @@ pub async fn run(
                 };
                 // Checked before the in-flight claim and before any RPC, so a
                 // refused command costs nothing and locks nothing.
-                // Only worth the RPC when the command could actually trip the
-                // cap: every wallet, above the threshold.
-                let holders = if targets.len() >= cfg.buyers.len()
-                    && cmd.pct > MAX_ALL_WALLET_SELL_PCT
-                {
-                    holders_of(&cfg, &rpc, &position.mint, &position.bonding_curve).await
-                } else {
-                    Holders::Unknown
-                };
+                // Sizing the command's real impact needs per-wallet holdings,
+                // and the same read establishes whether anyone else is in the
+                // coin — so this is one pass, not two. A command that cannot
+                // reach the cap even at 100% skips it entirely.
+                let (holders, units) =
+                    holders_of(&cfg, &rpc, &position.mint, &position.bonding_curve).await;
+                let position_units: u64 = units.iter().copied().fold(0, u64::saturating_add);
+                let targeted_units: u64 = targets
+                    .iter()
+                    .filter_map(|n| units.get(*n).copied())
+                    .fold(0, u64::saturating_add);
                 if let Some(refusal) =
-                    refuse_full_exit(&targets, cfg.buyers.len(), cmd.pct, holders)
+                    refuse_full_exit(targeted_units, position_units, cmd.pct, holders)
                 {
                     log::warn!("{refusal}");
                     continue;
                 }
-                if holders == Holders::OnlyUs && cmd.pct > MAX_ALL_WALLET_SELL_PCT {
-                    log::info!(
-                        "no other holders detected — full-size exit allowed for this command"
-                    );
+                if holders == Holders::OnlyUs && position_units > 0 {
+                    log::info!("no other holders detected — cap lifted for this command");
                 }
                 // Claim only for real sends: a simulation changes no balance and
                 // must not lock a wallet out of the sell it is rehearsing.
@@ -1371,8 +1394,8 @@ fn print_help() {
         "  status                  cost, live price, mcap, P&L (% and USD)",
         "  market                  live price / volume / net flow",
         "  s <pct>                 sell pct% of the position, ALL wallets  (simulate)",
-        "     >50% from ALL wallets is REFUSED while others hold — exit in tranches",
-        "     (allowed in full when nobody else holds the token, e.g. a test)",
+        "     a command selling >50% of the REMAINING position is REFUSED while",
+        "     others hold — ladder out instead; the cap lifts when nobody else holds",
         "  wallets are numbered 1..N, matching buyer-01.json..buyer-NN.json",
         "  s <wallets> <pct>       sell pct% from chosen wallets          (simulate)",
         "  s <wallets> <pct> go    same, but ACTUALLY SEND",
@@ -1782,44 +1805,69 @@ mod tests {
         assert!(err.contains("numbered from 1"), "{err}");
     }
 
+    /// Thirty wallets holding 1000 units each.
+    fn even_position() -> (u64, u64) {
+        (30_000, 30_000)
+    }
+
     #[test]
-    fn a_full_exit_from_every_wallet_is_refused_however_it_is_spelled() {
-        // The rug this guards against does not care about syntax: these are all
-        // the same instruction, and catching only one of them is decoration.
-        let all: Vec<usize> = (0..30).collect();
-        for targets in [all.clone(), (0..30).rev().collect(), {
-            let mut d = all.clone();
-            d.extend(all.clone()); // duplicates must not defeat the count
-            d
-        }] {
-            assert!(
-                refuse_full_exit(&targets, 30, 100.0, Holders::Others).is_some(),
-                "a full exit slipped through"
-            );
-        }
+    fn a_full_exit_is_refused_however_it_is_spelled() {
+        // Every spelling of "sell everything" resolves to the same units, so
+        // there is nothing to route around: s 100, s all 100, s 1-30 100.
+        let (all_units, position) = even_position();
+        assert!(refuse_full_exit(all_units, position, 100.0, Holders::Others).is_some());
+    }
+
+    #[test]
+    fn tranches_converge_without_ever_emptying() {
+        // The loophole this closes: counting WALLETS, three subset commands
+        // each looked harmless and together were the full exit — and three
+        // quick commands is exactly what a panicking operator types.
+        //
+        // Measured in units the same ladder is 33%, then 50% of what is left,
+        // then 100% of what is left, and only the last is refused.
+        let mut remaining = 30_000u64;
+        // s 1-10 100 -> 10_000 of 30_000 = 33%
+        assert!(refuse_full_exit(10_000, remaining, 100.0, Holders::Others).is_none());
+        remaining -= 10_000;
+        // s 11-20 100 -> 10_000 of 20_000 = 50%, exactly at the cap
+        assert!(refuse_full_exit(10_000, remaining, 100.0, Holders::Others).is_none());
+        remaining -= 10_000;
+        // s 21-30 100 -> 10_000 of 10_000 = 100%. Refused.
+        assert!(refuse_full_exit(10_000, remaining, 100.0, Holders::Others).is_some());
+        // And a half-slice of the remainder is still fine, so exiting stays
+        // possible — it just asymptotes instead of hitting zero.
+        assert!(refuse_full_exit(10_000, remaining, 50.0, Holders::Others).is_none());
+    }
+
+    #[test]
+    fn a_subset_large_enough_to_gut_the_position_is_refused() {
+        // Selecting fewer wallets is not a loophole either: 20 of 30 wallets
+        // at 100% is 67% of the position.
+        assert!(refuse_full_exit(20_000, 30_000, 100.0, Holders::Others).is_some());
+        // A wallet holding almost everything cannot be emptied in one command.
+        assert!(refuse_full_exit(29_000, 30_000, 100.0, Holders::Others).is_some());
     }
 
     #[test]
     fn the_cap_only_binds_when_someone_else_holds() {
-        let all: Vec<usize> = (0..30).collect();
+        let (all_units, position) = even_position();
         // During a test we are the market — there is no chart to rug.
-        assert!(refuse_full_exit(&all, 30, 100.0, Holders::OnlyUs).is_none());
+        assert!(refuse_full_exit(all_units, position, 100.0, Holders::OnlyUs).is_none());
         // Anything less certain keeps the cap. "I could not check" must never
         // unlock the larger sell.
-        assert!(refuse_full_exit(&all, 30, 100.0, Holders::Unknown).is_some());
-        assert!(refuse_full_exit(&all, 30, 100.0, Holders::Others).is_some());
+        assert!(refuse_full_exit(all_units, position, 100.0, Holders::Unknown).is_some());
+        assert!(refuse_full_exit(all_units, position, 100.0, Holders::Others).is_some());
         // At or below the cap, unrestricted.
-        assert!(refuse_full_exit(&all, 30, 50.0, Holders::Others).is_none());
-        assert!(refuse_full_exit(&all, 30, 49.9, Holders::Others).is_none());
-        assert!(refuse_full_exit(&all, 30, 50.1, Holders::Others).is_some());
+        assert!(refuse_full_exit(all_units, position, 50.0, Holders::Others).is_none());
+        assert!(refuse_full_exit(all_units, position, 50.1, Holders::Others).is_some());
     }
 
     #[test]
-    fn selecting_a_subset_is_never_capped() {
-        // The guard is against one keystroke emptying everything, not against
-        // exiting. Tranches must always work.
-        let subset: Vec<usize> = (0..10).collect();
-        assert!(refuse_full_exit(&subset, 30, 100.0, Holders::Others).is_none());
+    fn an_empty_position_is_not_guarded() {
+        // Nothing to sell means nothing to protect; refusing here would just
+        // confuse an operator whose wallets are already out.
+        assert!(refuse_full_exit(0, 0, 100.0, Holders::Others).is_none());
     }
 
     #[test]
