@@ -316,6 +316,47 @@ async fn main() -> Result<(), String> {
         needed.len()
     );
     if !execute {
+        // Quote anyway. Quotes create nothing and cost nothing, and they are
+        // the only honest answer to "what does this charge": Houdini bills no
+        // explicit user fee, so the entire cost — their ~0.5% partner
+        // commission, the spread on BOTH legs of SOL -> XMR -> SOL, and the
+        // Monero network fee — is embedded in the rate. `amountOut` is what
+        // actually arrives, so the difference is the real, all-in price.
+        println!("quoting (creates nothing)…");
+        println!();
+        let (mut total_in, mut total_out, mut quoted) = (0.0f64, 0.0f64, 0usize);
+        for (label, _) in &needed {
+            match quote(&http, &auth, target_sol).await {
+                Ok((_, amount_out)) => {
+                    let lost = target_sol - amount_out;
+                    let pct = if target_sol > 0.0 {
+                        lost / target_sol * 100.0
+                    } else {
+                        0.0
+                    };
+                    println!(
+                        "  {label:<14} send {target_sol:.6} → receive {amount_out:.6} SOL                           (cost {lost:.6} SOL, {pct:.2}%)"
+                    );
+                    total_in += target_sol;
+                    total_out += amount_out;
+                    quoted = quoted.saturating_add(1);
+                }
+                Err(e) => println!("  {label:<14} QUOTE FAILED: {e}"),
+            }
+        }
+        if quoted > 0 {
+            let lost = total_in - total_out;
+            let pct = if total_in > 0.0 {
+                lost / total_in * 100.0
+            } else {
+                0.0
+            };
+            println!();
+            println!(
+                "{quoted} quote(s): send {total_in:.6} SOL → receive {total_out:.6} SOL"
+            );
+            println!("ALL-IN COST {lost:.6} SOL ({pct:.2}%) — rate spread, not a line-item fee");
+        }
         println!();
         println!("DRY RUN — no orders created. Re-run with --execute.");
         println!("Each order will be created with useXmr=true, anonymous=true.");
