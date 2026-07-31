@@ -408,3 +408,46 @@ timeout 2700 env RUST_LOG=info LOG_ALL_CREATES=true \
 ```
 
 `SEND_MODE` unset = dry run. **Any other value sends real transactions.**
+
+## Pickup: Frankfurt box, ready but unfunded
+
+**Blocker: the 30 buyer wallets hold 0 SOL.** Everything else is done.
+
+Server `157.90.77.139` (Hetzner, 20 cores / 62 GB):
+- Ubuntu 24.04.4 on disk, RAID1 across both NVMes, all arrays `[UU]`. It arrived
+  as a bare rescue system in RAM with unpartitioned disks — wallets were NOT
+  created until an OS was installed, because a reboot would have destroyed
+  funded keys.
+- Repo at `/root/carbon` on `sniper`, submodule initialised (it clones EMPTY
+  otherwise and the build dies with a message that reads like a protoc problem).
+- chrony synced to ~94us. The create freshness gate depends on this.
+- Both feeds verified: 117k updates / 40s, 0 connection errors.
+- `SEND_MODE=simulate`. Nothing sends until that changes.
+
+Wallets: `buyer-01..buyer-30` in `/root/carbon/wallets`, mode 600, gitignored,
+on RAID1. **They exist on exactly one machine and are not backed up.**
+`wallets --secrets` prints the base58 keys for import.
+
+Tooling on the box: `wallets`, `distribute`, `private_fund`.
+
+To go live: fund, then `SEND_MODE=live` and `SEND_PATHS=fast,rpc,jito`
+(currently `fast` only — extra routes are free insurance, a signature lands at
+most once).
+
+### The open question this deploy exists to answer
+
+Landing delta from Frankfurt. Record so far, all from WSL over a home line:
+8 x `delta=+1`, 2 x `delta=+2`, never block 0. Frankfurt should make +1
+consistent rather than reach +0 — by the time the create's shred arrives the
+leader is largely done packing, and our buys bid 55.5M uL/CU against a create
+paying normal gas, so landing in the SAME block risks the scheduler ordering
+the buys before the create. Block 0 needs create+buys in one Jito bundle.
+
+### Sizing, settled
+
+SOL was $74.30, so $11k = 148 SOL. That is the capital base, NOT a position:
+deploying it into one launch buys 89% of supply at 5.93x the opening price,
+which is unsellable. `0.1 x 30 = 3 SOL` = 9.8% of supply at 1.10x is right;
+5 SOL is the ceiling on conviction. ~49 launches of dry powder.
+
+Only one launch's worth (~4.5 SOL) needs to be on the server at a time.
