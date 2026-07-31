@@ -569,6 +569,23 @@ async fn landing_check(
         if verdict == LandingCheck::Landed {
             break;
         }
+        // A reverted buy is TERMINAL: it is on chain, it failed, and its
+        // signature is spent, so it can never land. Once every transaction has
+        // a terminal status there is nothing left for another poll to learn,
+        // and waiting out the remaining rounds only delays the retry.
+        //
+        // Observed live: all four buys landed one slot BEFORE the create (the
+        // shred is pre-consensus, so a create seen there can land in a later
+        // slot than a buy sent in response) and reverted with
+        // IncorrectProgramId — the mint did not exist yet. The retry was
+        // correct and filled all four, but it waited the full 3.6s first and
+        // landed at delta=+9 instead of roughly +3.
+        if poll
+            .as_deref()
+            .is_some_and(|o| !o.is_empty() && o.iter().all(|s| *s != TxOutcome::Pending))
+        {
+            break;
+        }
     }
     verdict
 }
@@ -1078,6 +1095,24 @@ mod buy_sizing_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_all_reverted_batch_is_terminal_and_should_not_be_polled_further() {
+        // Every buy on chain and failed: the verdict is NotLanded and no
+        // further poll can change it, because a spent signature cannot land.
+        // Continuing to poll delayed the retry by ~2.7s in a live run and cost
+        // six slots of entry price.
+        let outcomes = [TxOutcome::Failed, TxOutcome::Failed];
+        assert!(outcomes.iter().all(|s| *s != TxOutcome::Pending));
+        assert_eq!(
+            fold_poll(LandingCheck::Indeterminate, Some(&outcomes)),
+            LandingCheck::NotLanded
+        );
+        // Still pending: must keep polling, or a slow confirmation is mistaken
+        // for a failure and retried on top of a live transaction.
+        let mixed = [TxOutcome::Failed, TxOutcome::Pending];
+        assert!(!mixed.iter().all(|s| *s != TxOutcome::Pending));
+    }
 
     #[test]
     fn rpc_error_is_not_nothing_landed() {
