@@ -762,6 +762,21 @@ pub fn gas_reserve(cfg: &Config, buyer: &Buyer) -> u64 {
         .saturating_add(TOKEN_ACCOUNT_RENT.saturating_mul(2))
         .saturating_add(tip)
         .saturating_add(MARGIN)
+        // Hold back what the EXIT will cost, not just the entry.
+        //
+        // The two TOKEN_ACCOUNT_RENT allowances above are consumed by the buy
+        // itself (the WSOL account and the Token-2022 base ATA), so without
+        // this a wallet is left with roughly MARGIN — about 2,000,000 lamports
+        // — while `sell_v2` needs its priority fee, its base fee, and rent for
+        // the quote account pump opens inside the instruction: ~2,244,000. The
+        // wallet ends up holding tokens it cannot sell, and the failure appears
+        // per-wallet as a raw `InsufficientFundsForRent` from simulation with
+        // nothing pointing at the cause.
+        //
+        // Taken from `sell::sell_cost_lamports()` rather than restated here, so
+        // a change to the sell's compute budget cannot silently invalidate the
+        // reserve the buy left behind.
+        .saturating_add(crate::sell::sell_cost_lamports())
 }
 
 /// Size a manual buy for one wallet: `pct` percent of its balance, capped so
@@ -999,6 +1014,28 @@ fn build_buy_tx(
 #[cfg(test)]
 mod buy_sizing_tests {
     use super::size_buy;
+
+    #[test]
+    fn the_reserve_covers_the_sell_that_follows() {
+        // The trap this closes: a wallet that spends everything it can on the
+        // buy holds tokens it cannot exit. `sell_v2` needs its priority fee,
+        // its base fee, and rent for the quote account pump opens inside the
+        // instruction — and the buy has already consumed both ATA rents.
+        let sell = crate::sell::sell_cost_lamports();
+        assert!(
+            sell >= 2_200_000,
+            "sell cost {sell} looks too low — 200k priority + 5k base + ~2.04M transient rent"
+        );
+        // What a wallet actually retains after the buy: the reserve minus the
+        // parts the buy spends (both ATA rents, priority, base, tips).
+        // Everything else is what the sell has to live on.
+        let residue_before_fix: u64 = 2_000_000; // MARGIN alone
+        assert!(
+            residue_before_fix < sell,
+            "the pre-fix residue ({residue_before_fix}) should NOT have covered a sell ({sell}) \
+             — that is the bug"
+        );
+    }
 
     #[test]
     fn a_full_buy_leaves_the_reserve_behind() {

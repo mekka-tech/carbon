@@ -61,6 +61,38 @@ const MAX_PRICE_CONF_RATIO: f64 = 0.05;
 // well past 30s. Polling only that long declared "not sold" for transactions
 // that were still live, and — because the in-flight claim is released when this
 // returns — invited a second full sell that then landed alongside the first.
+/// Compute unit limit for a sell. Sells are not racing anything, so this is
+/// sized for headroom rather than for priority.
+pub const SELL_COMPUTE_UNIT_LIMIT: u32 = 200_000;
+/// Compute unit price for a sell, micro-lamports.
+pub const SELL_PRIORITY_MICRO_LAMPORTS: u64 = 1_000_000;
+/// Rent-exemption for the quote (WSOL) token account pump opens, drains and
+/// closes inside `sell_v2`.
+///
+/// It is refunded when the account closes at the end of the instruction, but
+/// the seller must be able to fund it for the duration — a wallet that cannot
+/// is rejected with `InsufficientFundsForRent` no matter how many tokens it
+/// holds.
+pub const TRANSIENT_QUOTE_ACCOUNT_RENT: u64 = 2_039_280;
+
+/// Lamports a wallet must retain to be able to sell.
+///
+/// Held back by `dispatch::gas_reserve` at BUY time. A wallet that spends
+/// everything on the buy is a trapped position: it holds tokens it cannot
+/// exit, and the failure surfaces per-wallet as a raw
+/// `InsufficientFundsForRent` from simulation with no hint that the fix is to
+/// send it SOL. Sizing the buy to leave this behind is what prevents that.
+pub const fn sell_cost_lamports() -> u64 {
+    let priority = (SELL_COMPUTE_UNIT_LIMIT as u64).saturating_mul(SELL_PRIORITY_MICRO_LAMPORTS)
+        / 1_000_000;
+    priority
+        .saturating_add(5_000) // base fee
+        .saturating_add(TRANSIENT_QUOTE_ACCOUNT_RENT)
+        // Headroom: the fee config can move, and a sell that cannot pay is
+        // strictly worse than a buy that was slightly smaller.
+        .saturating_add(500_000)
+}
+
 const CONFIRM_POLLS: usize = 40;
 const CONFIRM_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
@@ -432,8 +464,8 @@ pub async fn sell_one(
     data.extend_from_slice(&1u64.to_le_bytes());
 
     let ixs = vec![
-        ComputeBudgetInstruction::set_compute_unit_limit(200_000),
-        ComputeBudgetInstruction::set_compute_unit_price(1_000_000),
+        ComputeBudgetInstruction::set_compute_unit_limit(SELL_COMPUTE_UNIT_LIMIT),
+        ComputeBudgetInstruction::set_compute_unit_price(SELL_PRIORITY_MICRO_LAMPORTS),
         Instruction {
             program_id: pdas::PUMPFUN_PROGRAM_ID,
             accounts: metas,
