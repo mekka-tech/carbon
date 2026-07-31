@@ -52,6 +52,64 @@ when some sends fail part way through.
 Direct distribution defeats casual clustering and naive bots. It does not
 defeat anyone who looks.
 
+## How the terminals actually detect this
+
+Worth knowing before spending time or fees on hygiene, because the three
+detectors key on different things and only one of them is about funding.
+
+| Label | Provider's own definition | Trigger |
+|---|---|---|
+| **Bundled Tx Wallet** (GMGN) | "A single account combines multiple wallets' txs into one tx bundle, **processed in the same block**" | Same-block buys. Funding is irrelevant to it. |
+| **Suspected Insider** (GMGN) | wallets sharing identical "**creation time, funding source and transfer time**" | The funding graph. This is the one hygiene here defeats. |
+| **Sniper** (GMGN) | "Wallet who buys in **earlier blocks** after pool created" | Timing. Unavoidable by definition. |
+
+TrenchRadar's bundle scanner is simpler still: it keys on **slot timing alone**
+— buys "within the same 0.4 seconds or so" — and explicitly does *not* use Jito
+bundle ids, funding-source analysis, or mixer tracing. It re-displays pump.fun's
+own warning flags.
+
+Three consequences:
+
+1. **The bundled and sniper labels are unavoidable.** Thirty wallets buying in
+   block +1 *is* the detection. No funding schedule changes it.
+2. **The insider heuristic needs all three signals to coincide**, and one of
+   them is funding *source*. A single source wallet funding thirty wallets
+   shares a source however far apart the transfers are — so spacing alone does
+   not break it. Multiple sources or a provider hop does.
+3. **Uniform gaps are themselves a pattern.** Thirty transfers at exactly two
+   hours apart is arguably more identifiable than thirty random ones; no
+   organic wallet set behaves like a metronome. `DIST_MIN_DELAY_MS` /
+   `DIST_MAX_DELAY_MS` are a range for this reason.
+
+On Solana an account does not exist on chain until it is funded, so the funding
+transaction *is* the creation time. Staggering funding staggers two of the three
+signals for free. The one it cannot touch is funding source.
+
+No provider documents a time threshold. The "wait N hours between wallets"
+figure circulating in trenches is folklore, not a published rule.
+
+### Spreading a funding run over days
+
+`--max-wallets N` funds a random N of the wallets still short, then exits:
+
+```
+distribute --max-wallets 3 --execute
+```
+
+Schedule that rather than holding one process open for two days — a long
+foreground run dies to a dropped session, a reboot or an OOM and resumes
+nothing, whereas this is idempotent by construction. A crude randomised
+schedule:
+
+```cron
+17 */5 * * *  cd /root/carbon && sleep $((RANDOM \% 3600)) && \
+              FUNDING_KEYPAIR=/root/funding.json distribute --max-wallets 2 --execute
+```
+
+The truncation happens *after* the shuffle, so each run picks a random subset;
+taking the first N of a sorted list would walk buyer-01..buyer-30 in order and
+reintroduce the index correlation the shuffle exists to remove.
+
 ## Breaking the link — provider deposits
 
 To actually sever the graph you need a route through something with a real

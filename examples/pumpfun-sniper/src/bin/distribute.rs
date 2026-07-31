@@ -5,6 +5,7 @@
 //!   distribute                         # print the plan, send nothing
 //!   distribute --execute               # actually send
 //!   distribute --target 0.2 --execute  # top every wallet up to 0.2 SOL
+//!   distribute --max-wallets 3 --execute  # fund 3 of them, rest next run
 //! ```
 //!
 //! # What this does and does not hide
@@ -300,6 +301,12 @@ async fn main() -> Result<(), String> {
 
     let execute = has("--execute");
     let list_only = has("--list");
+    // Fund at most this many wallets per run. Spreading thirty transfers over
+    // days is done by running this repeatedly from a scheduler, not by holding
+    // a process open for the whole window: a 58-hour foreground run dies to a
+    // dropped SSH session, a reboot, or an OOM, and resumes nothing.
+    // Idempotency (amounts come from live balances) is what makes that safe.
+    let max_wallets: Option<usize> = value_of("--max-wallets").and_then(|v| v.parse().ok());
     let target_sol = value_of("--target")
         .and_then(|v| v.parse().ok())
         .unwrap_or_else(|| env_f64("DIST_TARGET_SOL", DEFAULT_TARGET_SOL));
@@ -410,6 +417,13 @@ async fn main() -> Result<(), String> {
     // is which, then send one at a time with a random gap.
     transfers.retain(|t| t.lamports > 0);
     shuffle(&mut transfers)?;
+    // Truncate AFTER the shuffle: taking the first N of a sorted list would
+    // fund buyer-01..buyer-N on the first run and walk the set in order, which
+    // reintroduces exactly the index correlation the shuffle removes.
+    if let Some(n) = max_wallets {
+        transfers.truncate(n);
+        println!("--max-wallets {n}: funding {} this run, rest remain", transfers.len());
+    }
 
     println!();
     println!("sending {} transfer(s), one per transaction…", transfers.len());
