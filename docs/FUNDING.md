@@ -144,10 +144,39 @@ batch. The flow is: create the batch → collect one deposit address per order �
 write them to `deposits.txt` → `distribute --deposits`. Houdini routes and
 delivers to each `addressTo`.
 
-**Not yet built.** The endpoints above are transcribed from their spec and are
-not exercised by any code here, because that needs a partner key to test
-against. Untested request-building on a path that moves real money is worse
-than no code, so it waits for a key.
+**Built — `private_fund`.** Register on the Houdini partner portal (a free tier
+exists, no application needed) and set `HOUDINI_API_KEY` / `HOUDINI_API_SECRET`.
+
+```
+private_fund                      # quote only, creates nothing
+private_fund --execute            # create orders, write deposits.txt
+distribute --deposits deposits.txt --execute
+private_fund --status-order <houdiniId>
+```
+
+Every order is created with `useXmr: true` and `anonymous: true` — that pair is
+what buys the Monero route, and without them this is just a slower ordinary
+swap.
+
+Order creation and sending are separate commands on purpose: an unfunded order
+simply expires, whereas a send is irreversible. The split means the deposit
+addresses can be read and checked before a lamport moves.
+
+Auth is `Authorization: <ApiKey>:<ApiSecret>`, plus three mandatory compliance
+headers (`x-user-ip`, `x-user-agent`, `x-user-timezone`) — requests without
+them are rejected with a 400. Override via `HOUDINI_USER_IP`,
+`HOUDINI_USER_AGENT`, `HOUDINI_USER_TZ`.
+
+Set `HOUDINI_REFUND_ADDRESS`. A swap that fails or lands outside its quoted
+band has nowhere to return the principal without one; the tool warns loudly if
+it is unset.
+
+**Not exercised against the live API.** The schemas are transcribed from the
+spec, so every response is validated rather than trusted and failures are loud
+with the raw body attached. Most importantly `deposit_address_is_solana`
+refuses any deposit address that is not a valid Solana pubkey: the deposit leg
+is SOL, and a wrong-chain address would send funds somewhere unrecoverable.
+Quote for one wallet before running thirty.
 
 **Tradeoffs, honestly:**
 
@@ -160,11 +189,18 @@ than no code, so it waits for a key.
 - **Minimums.** Per-swap minimums may exceed a per-wallet top-up, which can
   force fewer, larger destinations and a second hop.
 
-### Axiom's provider
+### Axiom
 
-Mentioned as an option but **not verified** — no endpoint, auth scheme or
-minimums confirmed, so nothing is written here rather than guessed. Point at
-its docs and it slots into the same `--deposits` seam.
+**Axiom does not do private distribution.** What it offers is operational
+separation, not on-chain privacy: a public "alpha wallet" versus a private
+"size wallet" so followers tracking you on Axiom's own leaderboard see one and
+not the other, plus a burner-wallet workflow (fund, snipe, take profit, return,
+retire).
+
+Funding a burner from the size wallet is still a plain traceable transfer.
+Axiom is explicitly non-custodial (Turnkey MPC, they never hold funds), which
+is structurally incompatible with running a mixer. Their "privacy" is about not
+being copy-traded, not about breaking the graph.
 
 ## Operational notes
 
