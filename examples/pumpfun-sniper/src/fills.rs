@@ -14,10 +14,13 @@
 //!    receiver is gone, and that error is dropped. If the drain task dies the
 //!    sniper keeps buying with no tracking — the failure mode is a blank
 //!    panel, never a missed launch.
-//! 3. **Nothing here can panic.** No indexing, no unwrap, no slicing, no
-//!    arithmetic that can overflow (the crate denies
-//!    `clippy::arithmetic_side_effects` anyway). A panic in the drain task
-//!    would be contained to that task, but there is nothing to contain.
+//! 3. **Nothing here can panic.** No indexing, no unwrap, no slicing, and
+//!    every arithmetic operation is `saturating_*`. Note this is a property of
+//!    the code, NOT of the build: the crate does not deny
+//!    `clippy::arithmetic_side_effects`, and release builds wrap silently, so
+//!    plain `+`/`-` here would be a real hazard rather than a caught one. A
+//!    panic in the drain task would be contained to that task, but there is
+//!    nothing to contain.
 //!
 //! The log is a bounded ring: an unbounded *channel* with a bounded *store*.
 //! The channel is unbounded so the producer never waits; the store is bounded
