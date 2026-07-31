@@ -464,7 +464,7 @@ mod tests {
         for _ in 0..200 {
             let got = jittered_lamports(target, 12.0).unwrap();
             assert!(
-                got >= 132_000_000 && got <= 168_000_000,
+                (132_000_000..=168_000_000).contains(&got),
                 "{got} outside ±12% of {target}"
             );
         }
