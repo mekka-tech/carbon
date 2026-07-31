@@ -272,6 +272,19 @@ impl Processor<InstructionProcessorInputType<'_, PumpfunInstruction>> for Sniper
         if self.sniped_mints.contains(&coin.mint) {
             return Ok(());
         }
+        // Counts mints sniped for the life of the PROCESS, not positions still
+        // open — so after `MAX_POSITIONS` launches the sniper goes permanently
+        // inert even if every one of them has been fully sold, with a single
+        // warn line as the only sign. Surfaced loudly here until it counts open
+        // positions; a silent stop is the failure mode that costs the most.
+        if self.sniped_mints.len() >= self.cfg.max_positions {
+            log::error!(
+                "SNIPER INERT: {} of {} lifetime position slots used. It will not buy again \
+                 until restarted, even if every position has been sold.",
+                self.sniped_mints.len(),
+                self.cfg.max_positions
+            );
+        }
         if self.sniped_mints.len() >= self.cfg.max_positions {
             log::warn!(
                 "skipping {}: max positions ({}) reached",

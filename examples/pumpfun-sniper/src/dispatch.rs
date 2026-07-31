@@ -63,9 +63,24 @@ impl BuyDispatcher {
         }
     }
 
-    pub async fn run(self, mut signals: mpsc::Receiver<SnipeSignal>) {
+    /// One task per signal.
+    ///
+    /// This used to await `dispatch` inline, which meant a snipe did not return
+    /// until `landing_check` had finished polling — 900ms before its first poll
+    /// and up to 3.6s when nothing lands — plus the retry rebuild and the
+    /// position write. Any second launch arriving inside that window sat in the
+    /// channel behind it. The signal was never dropped, but a create delivered
+    /// seconds late is a create missed, and two watched creators launching
+    /// together is exactly the case worth being ready for.
+    ///
+    /// Dispatches for different mints are independent, so running them
+    /// concurrently is correct as well as faster.
+    pub async fn run(self: Arc<Self>, mut signals: mpsc::Receiver<SnipeSignal>) {
         while let Some(signal) = signals.recv().await {
-            self.dispatch(&signal).await;
+            let me = Arc::clone(&self);
+            tokio::spawn(async move {
+                me.dispatch(&signal).await;
+            });
         }
     }
 
@@ -231,6 +246,16 @@ impl BuyDispatcher {
         // fastest route wins and the others are no-ops.
         let mut paths: Vec<std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>> =
             Vec::new();
+        // TPU first. `join_all` polls in index order and every path does its
+        // serialization synchronously before its first await, so whichever is
+        // pushed first gets its bytes on the wire first. TPU is the only
+        // single-round-trip route, so it should never be queued behind three
+        // HTTP clients building request bodies.
+        if self.cfg.send_paths.contains(&SendPath::Tpu) {
+            let tpu = Arc::clone(&self.tpu);
+            let txs = txs.clone();
+            paths.push(Box::pin(async move { tpu.send(&txs).await }));
+        }
         if self.cfg.send_paths.contains(&SendPath::Rpc) {
             let rpc = Arc::clone(&self.rpc);
             let txs = txs.clone();
@@ -251,15 +276,6 @@ impl BuyDispatcher {
                 jito::send_bundles(&urls, &txs).await;
             }));
         }
-        // Direct QUIC to the next leaders' TPU. Targets and their connections
-        // are kept resolved and warm by a background task, so this is a
-        // single round trip and never awaits an RPC call.
-        if self.cfg.send_paths.contains(&SendPath::Tpu) {
-            let tpu = Arc::clone(&self.tpu);
-            let txs = txs.clone();
-            paths.push(Box::pin(async move { tpu.send(&txs).await }));
-        }
-
         futures::future::join_all(paths).await;
 
         // Retry. A snipe that lands nothing is worth another attempt with a

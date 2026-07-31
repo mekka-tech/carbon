@@ -57,7 +57,11 @@ const MAX_PRICE_CONF_RATIO: f64 = 0.05;
 /// How long to wait for a sell to land before calling it dropped. Matches the
 /// dispatcher's landing watcher: past ~30s the blockhash it was signed against
 /// has expired, so a transaction that has not landed never will.
-const CONFIRM_POLLS: usize = 15;
+// 150 slots at ~400ms is the blockhash lifetime, so a sell can still land
+// well past 30s. Polling only that long declared "not sold" for transactions
+// that were still live, and — because the in-flight claim is released when this
+// returns — invited a second full sell that then landed alongside the first.
+const CONFIRM_POLLS: usize = 40;
 const CONFIRM_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 fn ata(owner: &Pubkey, mint: &Pubkey, program: &Pubkey) -> Pubkey {
@@ -383,7 +387,27 @@ pub async fn sell_one(
         error: None,
         balance_before: None,
     };
-    let token_account = ata(&seller, mint, &pdas::TOKEN_2022_PROGRAM_ID);
+    // v2 coins are Token-2022; v1 (`create`) coins are classic SPL Token, and
+    // the sniper buys both. Deriving Token-2022 unconditionally meant a v1
+    // position reported "no balance" on every wallet, was marked exited by the
+    // background scan, and had NO exit path at all — the tokens were held and
+    // unsellable, with the panel showing zero.
+    //
+    // Resolved from the mint's owning program rather than from the position
+    // record, because that is a fact of the chain rather than of a file an
+    // older build may have written.
+    let token_program = match rpc.get_account(mint).await {
+        Ok(acct)
+            if acct.owner == pdas::TOKEN_PROGRAM_ID
+                || acct.owner == pdas::TOKEN_2022_PROGRAM_ID =>
+        {
+            acct.owner
+        }
+        // Unreadable mint: assume v2, which is what the sniper overwhelmingly
+        // holds, and let the balance read report honestly if that is wrong.
+        _ => pdas::TOKEN_2022_PROGRAM_ID,
+    };
+    let token_account = ata(&seller, mint, &token_program);
     let held = match rpc.get_token_account_balance(&token_account).await {
         Ok(b) => b.amount.parse::<u64>().unwrap_or(0),
         Err(_) => 0,
@@ -543,7 +567,9 @@ pub async fn report_proceeds(
         }
         Landing::Dropped => {
             log::warn!(
-                "#{index} SELL DID NOT LAND — no status after {}s, the tokens were not sold  sig {short}",
+                "#{index} SELL UNCONFIRMED after {}s — no status seen. The blockhash has \
+                 expired by now so it should not land, but VERIFY the balance before selling \
+                 this wallet again  sig {short}",
                 CONFIRM_POLLS.saturating_mul(CONFIRM_POLL_INTERVAL.as_secs() as usize)
             );
             return;

@@ -104,6 +104,11 @@ impl FastSenderPool {
             // Connections are pooled and kept alive so the hot path doesn't
             // pay for a TLS handshake per snipe.
             client: reqwest::Client::builder()
+            // Reqwest has NO default request timeout. A provider that accepts
+            // the connection and then black-holes would otherwise hold this
+            // send open until the OS TCP timeout — minutes — and every route
+            // downstream of the join_all barrier waits with it.
+            .timeout(std::time::Duration::from_millis(1_500))
                 .pool_idle_timeout(std::time::Duration::from_secs(90))
                 .tcp_nodelay(true)
                 .build()

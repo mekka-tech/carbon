@@ -42,7 +42,20 @@ pub async fn send_bundles(block_engine_urls: &[String], txs: &[VersionedTransact
     if block_engine_urls.is_empty() {
         return;
     }
-    let client = reqwest::Client::new();
+    // One pooled client for the process, not one per dispatch. Building it
+    // per call meant a fresh rustls config, DNS lookup, TCP handshake and TLS
+    // handshake to every configured region on every snipe — and because
+    // `join_all` polls in order, that synchronous setup ran before the faster
+    // routes were even polled.
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    let client = CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_millis(1_500))
+            .pool_idle_timeout(std::time::Duration::from_secs(600))
+            .tcp_nodelay(true)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    });
     let bundle_count = txs.len().div_ceil(MAX_BUNDLE_SIZE);
     if bundle_count > block_engine_urls.len() {
         log::warn!(

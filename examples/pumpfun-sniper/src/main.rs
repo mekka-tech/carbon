@@ -234,7 +234,7 @@ pub async fn main() -> CarbonResult<()> {
         initial_curve_v2,
         fill_recorder,
     );
-    tokio::spawn(dispatcher.run(signal_rx));
+    tokio::spawn(Arc::new(dispatcher).run(signal_rx));
 
     // Both feeds produce Update::Transaction, so the rest of the pipeline is
     // identical; only the producer differs. Built separately because the two
@@ -353,8 +353,16 @@ pub async fn main() -> CarbonResult<()> {
     // the sniper buys and then has nothing to say.
     if interactive {
         tokio::spawn(async move {
-            if let Err(err) = pipeline.run().await {
-                log::error!("pipeline stopped: {err:?}");
+            // `Ok` here is NOT success — `run()` returns Ok when its update
+            // channel closes, i.e. when every datasource has stopped. Logging
+            // only the Err case left the console rendering `*** LIVE ***` and
+            // the watch list over a feed that had gone silent, which is the
+            // worst possible failure: an armed-looking sniper that is deaf.
+            match pipeline.run().await {
+                Err(err) => log::error!("PIPELINE STOPPED: {err:?} — NOT SNIPING"),
+                Ok(()) => log::error!(
+                    "PIPELINE STOPPED: all datasources ended — NOT SNIPING. Restart required."
+                ),
             }
         });
         console::run(

@@ -491,6 +491,19 @@ pub enum Holders {
     Unknown,
 }
 
+/// Does this RPC error mean "no such account" rather than "I could not answer"?
+///
+/// The two must not be conflated: a nonexistent token account is a real zero
+/// balance, while a transport failure or a rate limit is no information at all,
+/// and treating the second as zero understates a sell's size in exactly the
+/// direction that would let a full exit slip past the cap.
+fn is_missing_account(err: &solana_client::client_error::ClientError) -> bool {
+    let text = err.to_string();
+    text.contains("could not find account")
+        || text.contains("Invalid param")
+        || text.contains("AccountNotFound")
+}
+
 /// Fraction of the sold supply we must hold to count as the only holders.
 /// Not 100%: dust, rounding and a stray test buy should not flip the verdict.
 const SOLE_HOLDER_THRESHOLD: f64 = 0.995;
@@ -536,12 +549,16 @@ async fn holders_of(
         // A token account that does not exist yet reads as an error and is a
         // genuine zero, not an unknown — a wallet whose buy never landed simply
         // holds nothing. Only treat it as unknown if the mint itself resolved.
-        let units = rpc
-            .get_token_account_balance(&ata)
-            .await
-            .ok()
-            .and_then(|b| b.amount.parse::<u64>().ok())
-            .unwrap_or(0);
+        // A missing token account is a genuine zero — a wallet whose buy never
+        // landed holds nothing. But an RPC that fails to ANSWER is not
+        // evidence of zero, and counting it as zero understates the sell's
+        // measured impact, which is the direction that lets a full exit
+        // through. Distinguish them.
+        let units = match rpc.get_token_account_balance(&ata).await {
+            Ok(b) => b.amount.parse::<u64>().unwrap_or(0),
+            Err(err) if is_missing_account(&err) => 0,
+            Err(_) => return (Holders::Unknown, Vec::new()),
+        };
         per_wallet.push(units);
         ours = ours.saturating_add(u128::from(units));
     }
@@ -581,7 +598,22 @@ fn refuse_full_exit(
     pct: f64,
     holders: Holders,
 ) -> Option<String> {
+    // A zero position with an Unknown verdict means the holdings read FAILED,
+    // not that the wallets are empty — and this returned `None` before the
+    // verdict was ever consulted, so a rate-limited RPC silently disabled the
+    // guard entirely. `sell_one` then does its own successful balance read and
+    // dumps everything. The doc above says "I could not check" must never
+    // unlock the larger exit; this is where it did.
     if position_units == 0 {
+        if holders == Holders::Unknown {
+            return Some(
+                "refusing: could not read the position's holdings, so the size of this sell \
+                 cannot be checked against the cap. Retry in a moment, or name fewer wallets — \
+                 a failed check must not authorise a full exit."
+                    .to_string(),
+            );
+        }
+        // Genuinely nothing held: nothing to protect.
         return None;
     }
     // With nobody else in the coin there is no chart to rug and no exit
@@ -715,7 +747,7 @@ fn summarise(outcomes: &[SellOutcome]) {
         match (&o.error, &o.signature) {
             (Some(err), _) => log::warn!("#{} {}: {err}", display_index(o.index), o.wallet),
             (None, Some(sig)) => log::info!(
-                "#{} SOLD {} tokens  sig {}",
+                "#{} SELL SENT (not yet landed) {} tokens  sig {}",
                 o.index,
                 o.tokens,
                 sig.get(..16).unwrap_or(sig)
@@ -1861,6 +1893,19 @@ mod tests {
         // At or below the cap, unrestricted.
         assert!(refuse_full_exit(all_units, position, 50.0, Holders::Others).is_none());
         assert!(refuse_full_exit(all_units, position, 50.1, Holders::Others).is_some());
+    }
+
+    #[test]
+    fn a_failed_holdings_read_must_not_unlock_a_full_exit() {
+        // The hole this closes: holders_of returns an empty vec when the RPC
+        // fails, which folded to position_units == 0, which returned None
+        // BEFORE the verdict was consulted. A rate-limited endpoint therefore
+        // disabled the guard completely — and sell_one's own balance read would
+        // then succeed and dump everything.
+        assert!(
+            refuse_full_exit(0, 0, 100.0, Holders::Unknown).is_some(),
+            "a failed holdings read must refuse, not permit"
+        );
     }
 
     #[test]

@@ -229,6 +229,29 @@ impl Datasource for JitoShredstreamGrpcClient {
         }
 
         tokio::spawn(async move {
+            // Reconnect forever.
+            //
+            // Without this loop the subscription is one-shot, and all three of
+            // its endings are permanent: a subscribe failure returns, a stream
+            // error returns, and a CLEAN close (`Ok(None)`) falls out of
+            // `try_for_each_concurrent` as `Ok` and logs nothing whatsoever.
+            //
+            // That last one is the dangerous case. When shredstream is the only
+            // datasource its sender is the only one, so dropping it closes the
+            // pipeline channel and the pipeline shuts down — while an
+            // interactive console keeps rendering `*** LIVE ***` and the watch
+            // list off RPC. The operator sees an armed sniper that is deaf.
+            //
+            // Backoff is capped and reset on a successful subscribe: a tight
+            // reconnect spin against a rate-limiting endpoint turns a transient
+            // outage into an IP ban, which is a permanent one.
+            let mut backoff_ms: u64 = 200;
+            const MAX_BACKOFF_MS: u64 = 10_000;
+            loop {
+            if cancellation_token.is_cancelled() {
+                log::info!("Cancelling Jito Shreadstream gRPC subscription.");
+                return;
+            }
             let result = tokio::select! {
                 _ = cancellation_token.cancelled() => {
                     log::info!("Cancelling Jito Shreadstream gRPC subscription.");
@@ -240,15 +263,21 @@ impl Datasource for JitoShredstreamGrpcClient {
             };
 
             let stream = match result {
-                Ok(r) => r.into_inner(),
+                Ok(r) => {
+                    log::info!("Jito shredstream subscribed.");
+                    backoff_ms = 200;
+                    r.into_inner()
+                }
                 Err(e) => {
-                    log::error!("Failed to subscribe: {e:?}");
-                    return;
+                    log::error!("shredstream subscribe failed, retrying in {backoff_ms}ms: {e:?}");
+                    tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+                    backoff_ms = backoff_ms.saturating_mul(2).min(MAX_BACKOFF_MS);
+                    continue;
                 }
             };
 
             let stream = try_unfold(
-                (stream, cancellation_token),
+                (stream, cancellation_token.clone()),
                 |(mut stream, cancellation_token)| async move {
                     tokio::select! {
                         _ = cancellation_token.cancelled() => {
@@ -306,18 +335,34 @@ impl Datasource for JitoShredstreamGrpcClient {
                                 // this, ALT-using transactions produce
                                 // truncated account lists and decode to
                                 // nothing without raising an error.
+                                // Shredstream has NO server-side filter, so this
+                                // stream carries every transaction on the network —
+                                // votes included, and at mainnet rates that is
+                                // thousands per second. Each one that reaches the
+                                // pipeline is deep-cloned several times before the
+                                // decoder gets to reject it on program id, on a
+                                // single-threaded loop. The create we are racing
+                                // queues behind all of it.
+                                //
+                                // So the filter has to happen HERE, before the
+                                // channel, not downstream. Sanitized v0 messages
+                                // require program_id_index to point into the static
+                                // key range, so a pump transaction cannot hide its
+                                // program id inside a lookup table — testing the
+                                // static keys is sound and needs no ALT resolution.
+                                let interesting = programs_of_interest.is_empty()
+                                    || transaction
+                                        .message
+                                        .static_account_keys()
+                                        .iter()
+                                        .any(|k| programs_of_interest.contains(k));
+                                if !interesting {
+                                    continue;
+                                }
+
                                 let loaded_addresses = match alt_cache.as_ref() {
-                                    Some(cache)
-                                        if programs_of_interest.is_empty()
-                                            || transaction
-                                                .message
-                                                .static_account_keys()
-                                                .iter()
-                                                .any(|k| programs_of_interest.contains(k)) =>
-                                    {
-                                        cache.resolve(&transaction.message).await
-                                    }
-                                    _ => Default::default(),
+                                    Some(cache) => cache.resolve(&transaction.message).await,
+                                    None => Default::default(),
                                 };
 
                                 let update = Update::Transaction(Box::new(TransactionUpdate {
@@ -336,8 +381,13 @@ impl Datasource for JitoShredstreamGrpcClient {
                                 }));
 
                                 if let Err(e) = sender.try_send((update, id_for_closure.clone())) {
+                                    // `continue`, not `return`: returning here
+                                    // abandons every remaining transaction in this
+                                    // entry AND every remaining entry in the batch,
+                                    // so one full-channel moment drops creates in
+                                    // bulk rather than one at a time.
                                     log::error!("Failed to send transaction update with signature {:?} at slot {}: {:?}", signature, message.slot, e);
-                                    return Ok(());
+                                    continue;
                                 }
                             }
                         }
@@ -351,7 +401,21 @@ impl Datasource for JitoShredstreamGrpcClient {
                 })
                 .await
             {
-                log::error!("Grpc stream error: {e:?}");
+                log::error!("shredstream stream error: {e:?}");
+            } else {
+                // The silent ending. A clean server-side close is indistinguish-
+                // able from healthy completion here, so it MUST be logged: it is
+                // the difference between a sniper that is watching and one that
+                // only looks like it.
+                log::error!(
+                    "shredstream closed cleanly — the feed has stopped delivering. Reconnecting."
+                );
+            }
+            if cancellation_token.is_cancelled() {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+            backoff_ms = backoff_ms.saturating_mul(2).min(MAX_BACKOFF_MS);
             }
         });
 
