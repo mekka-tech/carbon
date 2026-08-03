@@ -301,6 +301,11 @@ async fn main() -> Result<(), String> {
 
     let execute = has("--execute");
     let list_only = has("--list");
+    // Sweep: send the source's ENTIRE balance minus the transaction fee, and
+    // keep nothing back. Used for wallet migration, where leaving the normal
+    // source reserve behind would strand ~0.01 SOL in every emptied wallet —
+    // a dust trail that links the old set to the migration itself.
+    let sweep = has("--sweep");
     // Fund at most this many wallets per run. Spreading thirty transfers over
     // days is done by running this repeatedly from a scheduler, not by holding
     // a process open for the whole window: a 58-hour foreground run dies to a
@@ -329,7 +334,47 @@ async fn main() -> Result<(), String> {
     // Build the transfer list. Either our own wallets (top up to target) or a
     // provider's deposit addresses (amounts fixed by their quote).
     let mut transfers: Vec<Transfer> = if let Some(path) = value_of("--deposits") {
-        load_deposit_file(&path)?
+        let mut listed = load_deposit_file(&path)?;
+        if sweep {
+            // One destination only — the whole balance goes to one place, so a
+            // second entry would silently receive nothing.
+            if listed.len() != 1 {
+                return Err(format!(
+                    "--sweep sends the entire balance to ONE address, but {} were listed",
+                    listed.len()
+                ));
+            }
+            let from = load_funding_keypair()?;
+            let balance = rpc
+                .get_balance(&from.pubkey())
+                .await
+                .map_err(|e| format!("cannot read source balance: {e}"))?;
+            // EXACTLY the fee, no slack. The account must end on zero so it is
+            // closed and purged: any non-zero remainder below the rent-exempt
+            // minimum (~890,880 lamports) is rejected with "insufficient funds
+            // for rent", which is what a 5,000-lamport safety margin caused —
+            // it left the wallet holding dust it was not allowed to hold.
+            // Ceiling, not floor: the runtime rounds the priority fee UP, so
+            // 450 CU x 50,000 uL/CU = 22.5 is charged as 23. Flooring to 22
+            // leaves the transfer one lamport short of payable and it fails
+            // with InsufficientFunds (0x1).
+            let priority = u64::from(COMPUTE_UNIT_LIMIT)
+                .saturating_mul(PRIORITY_FEE_MICRO_LAMPORTS)
+                .saturating_add(999_999)
+                .saturating_div(1_000_000);
+            let fee = 5_000u64.saturating_add(priority);
+            let send = balance.saturating_sub(fee);
+            if send == 0 {
+                return Err(format!(
+                    "source holds {balance} lamports, below the {fee} lamport fee"
+                ));
+            }
+            if let Some(first) = listed.first_mut() {
+                first.lamports = send;
+                first.current = Some(balance);
+            }
+        }
+        listed
     } else {
         let target = sol_to_lamports(target_sol);
         let destinations = load_destinations()?;
@@ -390,10 +435,16 @@ async fn main() -> Result<(), String> {
     // Fees are per transaction: base 5,000 plus the priority fee, which at
     // COMPUTE_UNIT_LIMIT × PRIORITY_FEE_MICRO_LAMPORTS / 1e6 is tiny. Budget
     // generously — running dry half way through leaves a partly funded set.
-    let fee_budget = u64::try_from(funded)
-        .unwrap_or(0)
-        .saturating_mul(20_000)
-        .saturating_add(SOURCE_RESERVE_LAMPORTS);
+    // In sweep mode the amount is already `balance - fee`, so demanding a
+    // reserve on top of it would refuse every sweep.
+    let fee_budget = if sweep {
+        0
+    } else {
+        u64::try_from(funded)
+            .unwrap_or(0)
+            .saturating_mul(20_000)
+            .saturating_add(SOURCE_RESERVE_LAMPORTS)
+    };
     let required = total.saturating_add(fee_budget);
     println!(
         "source {} holds {:.6} SOL, needs {:.6} (transfers + fees + reserve)",
@@ -432,8 +483,18 @@ async fn main() -> Result<(), String> {
     for (i, t) in transfers.iter().enumerate() {
         // A fresh blockhash per send: this run spans minutes, and one fetched
         // at the start would expire part way through.
-        let blockhash = match rpc.get_latest_blockhash().await {
-            Ok(h) => h,
+        //
+        // FINALIZED, not confirmed. Preflight simulation runs on whichever node
+        // answers, and a `confirmed` blockhash from a fork tip the simulating
+        // node has not seen yet is rejected with "Blockhash not found" — which
+        // failed every send in a 19-wallet consolidation. A finalized hash is
+        // ~32 slots old, so every node knows it, and it still leaves ~118 slots
+        // of validity. This is not a latency-critical path; correctness wins.
+        let blockhash = match rpc
+            .get_latest_blockhash_with_commitment(CommitmentConfig::finalized())
+            .await
+        {
+            Ok((h, _)) => h,
             Err(e) => {
                 println!("  {} SKIPPED — no blockhash: {e}", t.label);
                 failed = failed.saturating_add(1);

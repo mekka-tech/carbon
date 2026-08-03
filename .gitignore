@@ -117,3 +117,9 @@ Thumbs.db
 # Sniper runtime state — per-machine, written at run time, never source.
 /positions/
 sniper.log
+
+# Funding source wallet — holds SOL, never commit.
+/funding.json
+
+# Axiom wallet keys — spendable, never commit.
+/axiom/
