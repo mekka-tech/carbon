@@ -969,9 +969,27 @@ fn build_buy_tx(
                 cfg.track_volume,
             ),
         ]),
-        // A v2 buy spends *quote tokens*, so the lamports have to be wrapped
-        // first: create the WSOL account, fund it, sync it so the program can
-        // see the balance, then buy. The base ATA is Token-2022.
+        // The v2 quote leg is paid in NATIVE SOL, not wrapped SOL.
+        // `buy_exact_quote_in_v2` moves lamports out of `user` itself — visible
+        // on chain as System transfers inside the instruction — and the matching
+        // sell pays proceeds back as native SOL, verified across 4/4 live sells.
+        //
+        // The buyer's quote ATA still has to EXIST, because the instruction takes
+        // `associated_quote_user`. Funding it is what was wrong: pre-wrapping
+        // moved the buy amount out of exactly the native balance the program was
+        // about to charge, so a wallet needed TWICE the buy amount and the second
+        // charge failed with
+        //     Transfer: insufficient lamports <left>, need <amount>
+        //     custom program error: 0x1     (instruction index 6)
+        //
+        // That stayed invisible while buys were a small fraction of each wallet:
+        // the leftover native balance silently covered the second charge and the
+        // wrapped SOL came back via `unwrap_after_buy`, so the round trip netted
+        // out. Under BUY_SIZING=balance there is no leftover, and every wallet in
+        // the fleet failed on the same launch.
+        //
+        // Do NOT reintroduce the wrap without simulating a real v2 buy first —
+        // `SEND_MODE=simulate` returns this exact error before any money moves.
         Coin::V2(coin) => {
             let quote_ata = coin.quote_ata(&buyer_pk);
             ixs.extend([
@@ -981,12 +999,6 @@ fn build_buy_tx(
                     &coin.quote_mint,
                     &coin.quote_token_program,
                 ),
-                solana_system_interface::instruction::transfer(
-                    &buyer_pk,
-                    &quote_ata,
-                    amount_lamports,
-                ),
-                instructions::sync_native(&quote_ata),
                 instructions::create_ata_idempotent_with_program(
                     &buyer_pk,
                     &buyer_pk,
@@ -1001,7 +1013,8 @@ fn build_buy_tx(
                     min_tokens_out,
                 ),
             ]);
-            // Reclaim whatever the curve did not take, plus the account rent.
+            // The quote ATA is created empty and stays empty. Closing it returns
+            // its rent, plus any quote the curve refunded into it.
             if cfg.unwrap_after_buy {
                 ixs.push(instructions::close_account(
                     &quote_ata, &buyer_pk, &buyer_pk,

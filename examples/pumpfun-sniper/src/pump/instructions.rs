@@ -21,8 +21,16 @@ const BUY_EXACT_QUOTE_IN_V2_DISCRIMINATOR: [u8; 8] = [194, 171, 28, 70, 104, 77,
 /// fails with `IllegalOwner` when the ATA already exists.
 const ATA_CREATE_IDEMPOTENT: u8 = 1;
 
-/// SPL token instruction tags used for the wrapped-SOL leg of a v2 buy.
+/// SPL token instruction tags. `CLOSE_ACCOUNT` reclaims the empty quote ATA's
+/// rent after a v2 buy.
 const SPL_TOKEN_CLOSE_ACCOUNT: u8 = 9;
+/// Retained deliberately, not dead by accident: the v2 buy used to wrap its
+/// lamports into WSOL before calling the program, and that is exactly what made
+/// every buy on one launch fail — the program charges NATIVE SOL, so wrapping
+/// first meant the wallet needed twice the buy amount. Kept so the next person
+/// to reach for `sync_native` on the buy path finds this note instead of
+/// rediscovering it with real money.
+#[allow(dead_code)]
 const SPL_TOKEN_SYNC_NATIVE: u8 = 17;
 
 /// Accounts `buy_exact_quote_in_v2` takes. Unlike v1, the IDL count is the real
@@ -238,6 +246,12 @@ pub fn create_ata_idempotent_with_program(
 /// token balance from its lamport balance. Needed after topping a WSOL ATA up
 /// with a plain system transfer, otherwise the tokens are invisible to the
 /// program.
+///
+/// **Not used on the buy path, and must not be.** `buy_exact_quote_in_v2` takes
+/// its quote as native SOL straight from `user`; wrapping first strands the buy
+/// amount in the WSOL ATA and the program's own transfer then fails with
+/// `custom program error: 0x1`. See the note on the V2 arm in `dispatch.rs`.
+#[allow(dead_code)]
 pub fn sync_native(wsol_account: &Pubkey) -> Instruction {
     Instruction {
         program_id: pdas::TOKEN_PROGRAM_ID,
