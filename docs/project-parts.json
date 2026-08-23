@@ -1,0 +1,108 @@
+{
+  "repository_type": "dual-monorepo",
+  "generated": "2026-07-29",
+  "branch": "sniper",
+  "commit": "e0cad9750cacff47dc1c461c263ffb5c9737559e",
+  "tracks": "origin/claude/pumpfun-coin-sniper-mvwiwh",
+  "upstream_fork_of": "https://github.com/sevenlabs-hq/carbon",
+  "supersedes_branches": ["test/1", "feature/ben", "sniper-all-tokens"],
+  "parts": [
+    {
+      "part_id": "pumpfun-sniper",
+      "display_name": "pump.fun Creator-Wallet Sniper",
+      "role": "product",
+      "project_type_id": "cli",
+      "root_path": "examples/pumpfun-sniper/",
+      "language": "Rust",
+      "language_version": "1.88.0",
+      "cargo_package": "pumpfun-sniper-example",
+      "entry_point": "examples/pumpfun-sniper/src/main.rs",
+      "architecture_pattern": "geyser listener -> guarded signal -> parallel multi-wallet dispatch across redundant send routes",
+      "source_files": 13,
+      "total_files": 21,
+      "approx_lines": 5100,
+      "tests": { "count": 36, "passing": 36, "verified": "2026-07-29" },
+      "docs": [
+        "architecture-sniper.md",
+        "configuration-reference.md",
+        "verification-status.md"
+      ],
+      "branch_docs": [
+        "SNIPER_PLAN.md",
+        "SNIPER_HANDOFF.md",
+        "examples/pumpfun-sniper/DISPATCH_PLAN.md",
+        "examples/pumpfun-sniper/PROVIDERS.md",
+        "examples/pumpfun-sniper/VERIFICATION.md",
+        "examples/pumpfun-sniper/README.md"
+      ]
+    },
+    {
+      "part_id": "carbon-framework",
+      "display_name": "Carbon Indexing Framework",
+      "role": "dependency (upstream)",
+      "project_type_id": "library",
+      "root_paths": ["crates/core/", "decoders/", "datasources/", "metrics/"],
+      "language": "Rust",
+      "version": "1.0.0",
+      "architecture_pattern": "pipes-and-filters over a bounded single-consumer channel, builder-assembled",
+      "docs": ["architecture-carbon-framework.md"],
+      "stats": { "decoders": 63, "datasources": 14, "metrics_exporters": 2 }
+    },
+    {
+      "part_id": "codegen-cli",
+      "display_name": "Carbon CLI / Renderer (TypeScript)",
+      "role": "tooling (upstream)",
+      "project_type_id": "cli",
+      "root_path": "packages/",
+      "language": "TypeScript",
+      "package_manager": "pnpm + turbo",
+      "packages": ["cli", "renderer", "versions"],
+      "note": "Replaced the former Rust crates/cli. Generates the decoders/ tree."
+    }
+  ],
+  "external_dependencies": [
+    { "name": "Yellowstone gRPC geyser", "protocol": "gRPC/HTTP-2", "purpose": "create detection", "commitment": "Processed", "required": true },
+    { "name": "Solana JSON-RPC", "protocol": "HTTPS", "purpose": "Global account, fee_config assert, balances, blockhash, leader schedule, sends", "required": true },
+    { "name": "Jito Block Engine", "protocol": "HTTPS", "purpose": "bundle submission", "regions": 6, "required": false },
+    { "name": "Fast landing providers", "protocol": "HTTPS (json or raw base64)", "purpose": "anti-MEV send routes", "required": false },
+    { "name": "Validator TPU", "protocol": "QUIC", "purpose": "direct leader send", "required": false }
+  ],
+  "status": {
+    "builds": true,
+    "tests_passing": true,
+    "buy_layout_verified_against_mainnet": true,
+    "live_transaction_ever_sent": false,
+    "simulate_against_live_geyser": false,
+    "block_zero_reachable": false,
+    "exit_path_implemented": false,
+    "go_live_checklist_steps_complete": "1 of 6"
+  },
+  "known_doc_defects": [
+    {
+      "file": "examples/pumpfun-sniper/README.md",
+      "claim": "create_v2 not yet implemented, buys use v1 instruction only",
+      "reality": "v2 implemented; SNIPE_V2 defaults to true (commit 64c05118)",
+      "severity": "misleading"
+    },
+    {
+      "file": "examples/pumpfun-sniper/README.md",
+      "claim": "SEND_MODE selects simulate | rpc | jito",
+      "reality": "SEND_MODE is dry-run vs live only; any non-simulate value SENDS REAL TRANSACTIONS. Routes come from SEND_PATHS.",
+      "severity": "dangerous"
+    },
+    {
+      "file": "SNIPER_HANDOFF.md",
+      "section": "8 Known residual risks",
+      "claim": "create_v2 / mayhem coins are unsupported",
+      "reality": "Supported; contradicts section 3 of the same file",
+      "severity": "misleading"
+    }
+  ],
+  "highest_risk_items": [
+    "Two of the 18 v1 buy accounts (bonding_curve_v2, buyback fee recipient) arrive via remaining_accounts and appear in neither the IDL nor the decoder — a pump.fun upgrade breaks buys with no compile error and no test failure",
+    "v2 (27-account) layout rests on IDL plus three reproduced mainnet buys; differential simulation was not repeated for v2",
+    "A wrong fast-provider tip account is accepted and then silently never lands",
+    "sniped_mints never shrinks, so MAX_POSITIONS is a process-lifetime budget",
+    "PRIORITY_FEE_JITTER defaults to 0, making all wallets bid identically"
+  ]
+}

@@ -15,6 +15,8 @@ crate-type = ["rlib"]
 [dependencies]
 solana-client = { workspace = true }
 solana-entry = { workspace = true, features = ["agave-unstable-api"] }
+solana-message = { workspace = true }
+solana-pubkey = { workspace = true }
 solana-transaction-status = { workspace = true }
 
 carbon-core = { workspace = true }
@@ -27,3 +29,4 @@ log = { workspace = true }
 scc = "2.4.0"
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true }
+tonic = { workspace = true }

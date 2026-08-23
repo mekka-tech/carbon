@@ -111,3 +111,15 @@ jspm_packages/
 .Trashes
 ehthumbs.db
 Thumbs.db
+# Sniper buyer keypairs — NEVER commit. Contains spendable private keys.
+/wallets/
+
+# Sniper runtime state — per-machine, written at run time, never source.
+/positions/
+sniper.log
+
+# Funding source wallet — holds SOL, never commit.
+/funding.json
+
+# Axiom wallet keys — spendable, never commit.
+/axiom/

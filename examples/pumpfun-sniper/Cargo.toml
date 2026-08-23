@@ -1,0 +1,56 @@
+[package]
+name = "pumpfun-sniper-example"
+version = "1.0.0"
+edition = { workspace = true }
+publish = false
+
+[dependencies]
+carbon-core = { workspace = true }
+carbon-jito-shredstream-grpc-datasource = { workspace = true }
+carbon-log-metrics = { workspace = true }
+carbon-pumpfun-decoder = { workspace = true }
+carbon-yellowstone-grpc-datasource = { workspace = true }
+
+base64 = { workspace = true }
+bincode = { workspace = true }
+borsh = { workspace = true }
+bs58 = { workspace = true }
+dotenv = { workspace = true }
+env_logger = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+yellowstone-grpc-proto = { workspace = true }
+
+solana-client = { workspace = true }
+solana-commitment-config = { workspace = true }
+solana-hash = { workspace = true }
+solana-instruction = { workspace = true }
+solana-message = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-signature = { workspace = true }
+solana-system-interface = { workspace = true }
+solana-transaction = { workspace = true }
+
+solana-compute-budget-interface = "^3.0.0"
+solana-keypair = "^3.0.0"
+solana-signer = "^3.0.0"
+
+# Direct-TPU send path. `solana-client` already pulls both in transitively (its
+# own `ConnectionCache` wrapper is built on them); they are named here so the
+# `ClientConnection` trait and the QUIC port offset can be used directly. The
+# `agave-unstable-api` feature is what `solana-client` itself enables — without
+# it the crate is `#[deprecated]` at crate level and every use warns.
+solana-connection-cache = { version = "^3.1.5", default-features = false, features = [
+    "agave-unstable-api",
+] }
+solana-quic-definitions = "^3.0.0"
+crossterm = { version = "0.28", default-features = false, features = ["windows", "events"] }
+ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+
+[dependencies.rustls]
+default-features = false
+features = ["std", "aws_lc_rs"]
+version = "0.23.35"
